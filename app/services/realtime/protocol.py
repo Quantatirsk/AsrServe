@@ -5,6 +5,8 @@ from collections import deque
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import settings
+
 MODEL_ID = "confucius4-r2t2"
 MODEL_REPOSITORY = "netease-youdao/Confucius4-R2T2"
 MODEL_REVISION = "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9"
@@ -16,7 +18,9 @@ MAX_SECONDS = 3600
 OFFLINE_TAIL_SAMPLES = 4 * CHUNK_SAMPLES
 OFFLINE_MAX_SAMPLES = 60 * SAMPLE_RATE
 OFFLINE_MAX_BYTES = OFFLINE_MAX_SAMPLES * 4
-OFFLINE_CONCURRENCY = 4  # Segments of one file batched together by vLLM.
+# vLLM batches a file's segments; the Rust CPU engine decodes one call at a time
+# from a small queue, so concurrency there only overflows it.
+OFFLINE_CONCURRENCY = 1 if settings.DEVICE == "cpu" else 8
 PROTOCOL_VERSION = 1
 
 
