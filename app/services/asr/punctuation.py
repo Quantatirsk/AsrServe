@@ -23,20 +23,38 @@ def get_punctuation_model() -> AutoModel:
     )
 
 
-def restore_sentence_ending(text: str) -> str:
-    ending = text.rstrip().rstrip(_CLOSING_QUOTES).rstrip()
-    if not ending or ending[-1] in _TERMINALS:
-        return text
-    results = get_punctuation_model().generate(input=text)
+def _ending(text: str) -> str:
+    return text.rstrip().rstrip(_CLOSING_QUOTES).rstrip()
+
+
+def restore_sentence_endings(texts: list[str]) -> list[str]:
+    """One model call for every text missing a final mark: per-call overhead
+    (about 0.2 s) dwarfs the per-text cost (about 0.01 s)."""
+    missing = [
+        i
+        for i, text in enumerate(texts)
+        if (e := _ending(text)) and e[-1] not in _TERMINALS
+    ]
+    restored = list(texts)
+    if not missing:
+        return restored
+    results = get_punctuation_model().generate(input=[texts[i] for i in missing])
+    if not isinstance(results, list) or len(results) != len(missing):
+        raise RuntimeError("Punctuation model returned no valid text")
+    for i, result in zip(missing, results):
+        restored[i] = _copy_final_mark(texts[i], result)
+    return restored
+
+
+def _copy_final_mark(text: str, result: object) -> str:
     if (
-        not isinstance(results, list)
-        or len(results) != 1
-        or not isinstance(results[0], dict)
-        or not isinstance(results[0].get("text"), str)
-        or not results[0]["text"].strip()
+        not isinstance(result, dict)
+        or not isinstance(result.get("text"), str)
+        or not result["text"].strip()
     ):
         raise RuntimeError("Punctuation model returned no valid text")
-    restored = results[0]["text"].rstrip().rstrip(_CLOSING_QUOTES).rstrip()
+    ending = _ending(text)
+    restored = _ending(result["text"])
     if not restored or restored[-1] not in _TERMINALS:
         return text
     # FunASR includes EOF period restoration; never copy its interior rewrites.

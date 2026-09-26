@@ -16,7 +16,7 @@ from .engines import ASRFullResult, ASRSegmentResult, WordToken
 from .forced_aligner import ForcedAligner, _load_audio
 from .long_audio import prepare_long_audio
 from .rust_backend import RustForcedAligner
-from .punctuation import restore_sentence_ending
+from .punctuation import restore_sentence_endings
 
 if TYPE_CHECKING:
     from app.utils.audio_splitter import AudioSegment
@@ -51,16 +51,18 @@ class R2T2Engine:
             if not segment.temp_file or not Path(segment.temp_file).is_file():
                 raise FileNotFoundError(f"Missing audio segment: {segment.temp_file}")
         audios = [_load_audio(segment.temp_file) for segment in segments]
-        # The engine batches concurrent segments; punctuation and alignment stay serial.
+        # The engine batches concurrent segments; alignment stays serial.
         pool = ThreadPoolExecutor(OFFLINE_CONCURRENCY)
         try:
-            texts = list(pool.map(lambda audio: transcribe_segment(audio, hotwords), audios))
+            texts = list(
+                pool.map(lambda audio: transcribe_segment(audio, hotwords), audios)
+            )
         finally:
             pool.shutdown(cancel_futures=True)
+        if enable_punctuation:
+            texts = restore_sentence_endings(texts)
         results = []
         for segment, audio, text in zip(segments, audios, texts):
-            if enable_punctuation:
-                text = restore_sentence_ending(text)
             words = None
             if word_timestamps:
                 aligned = self.aligner.align_transcript(

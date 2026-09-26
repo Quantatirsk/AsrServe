@@ -143,7 +143,7 @@ class R2T2OfflineTest(unittest.TestCase):
                 word_timestamps=True,
             )[0]
             self.assertEqual(result.text, expected)
-            punctuation.return_value.generate.assert_called_once_with(input=raw)
+            punctuation.return_value.generate.assert_called_once_with(input=[raw])
             engine.aligner.align_transcript.assert_called_once_with(
                 audio_path=source.name, text=expected, audio=audio
             )

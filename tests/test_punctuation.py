@@ -1,7 +1,11 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from app.services.asr.punctuation import restore_sentence_ending
+from app.services.asr.punctuation import restore_sentence_endings
+
+
+def restore_sentence_ending(text):
+    return restore_sentence_endings([text])[0]
 
 
 class SentenceEndingTest(unittest.TestCase):
@@ -49,6 +53,19 @@ class SentenceEndingTest(unittest.TestCase):
             model.generate.side_effect = ValueError("Model failed")
             with self.assertRaisesRegex(ValueError, "Model failed"):
                 restore_sentence_ending("hello")
+
+
+class BatchTest(unittest.TestCase):
+    def test_one_call_covers_only_texts_missing_a_mark_in_order(self) -> None:
+        with patch("app.services.asr.punctuation.get_punctuation_model") as model:
+            model.return_value.generate.return_value = [{"text": "a."}, {"text": "c?"}]
+            self.assertEqual(
+                restore_sentence_endings(["a", "b.", "c", ""]), ["a.", "b.", "c?", ""]
+            )
+            model.return_value.generate.assert_called_once_with(input=["a", "c"])
+            model.return_value.generate.return_value = [{"text": "a."}]
+            with self.assertRaises(RuntimeError):
+                restore_sentence_endings(["a", "c"])
 
 
 class TerminalFormattingTest(unittest.TestCase):
