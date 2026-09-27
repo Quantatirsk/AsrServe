@@ -16,6 +16,18 @@ MIN_SPEAKER_COVERAGE = 0.5
 MATERIAL_SPEAKER_COVERAGE = 0.2
 MAX_TURN_GAP_SECONDS = 1.0
 MAX_INTERJECTION_SECONDS = 2.0
+# Past this span a paragraph breaks at the next sentence end; at twice it, anywhere.
+MAX_PARAGRAPH_SECONDS = 60.0
+SENTENCE_ENDS = ("。", "！", "？", ".", "!", "?")
+
+
+def _paragraph_full(
+    first: ASRSegmentResult, last: ASRSegmentResult, following: ASRSegmentResult
+) -> bool:
+    span = following.end_time - first.start_time
+    return span > 2 * MAX_PARAGRAPH_SECONDS or (
+        span > MAX_PARAGRAPH_SECONDS and last.text.rstrip().endswith(SENTENCE_ENDS)
+    )
 
 
 def _join_turns(segments: Sequence[ASRSegmentResult]) -> ASRSegmentResult:
@@ -43,7 +55,10 @@ def _merge_same_speaker_turns(
     turns = []
     group = []
     for segment in segments:
-        if group and segment.speaker_id != group[-1].speaker_id:
+        if group and (
+            segment.speaker_id != group[-1].speaker_id
+            or _paragraph_full(group[0], group[-1], segment)
+        ):
             turns.append(_join_turns(group))
             group = []
         group.append(segment)
@@ -60,7 +75,7 @@ def consolidate_speaker_turns(
     Brief interruptions inherit the surrounding main speaker for paragraph
     presentation only. Every text character and aligned word instant survives.
     Count interruption spans without pauses between them; short main turns
-    qualify too. Thresholds use the final, sample-rate-scaled recording timeline.
+    qualify too. Long paragraphs break at sentence ends (see _paragraph_full). Thresholds use the final, sample-rate-scaled recording timeline.
     """
     turns = _merge_same_speaker_turns(segments)
 
@@ -75,7 +90,10 @@ def consolidate_speaker_turns(
             interruption_seconds = 0.0
             while end < len(turns):
                 candidate = turns[end]
-                if candidate.start_time - previous.end_time > MAX_TURN_GAP_SECONDS:
+                if (
+                    candidate.start_time - previous.end_time > MAX_TURN_GAP_SECONDS
+                    or _paragraph_full(main, previous, candidate)
+                ):
                     break
                 if candidate.speaker_id == main.speaker_id:
                     if end > index:

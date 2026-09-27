@@ -10,6 +10,7 @@ import librosa
 import soundfile as sf
 import tempfile
 import os
+from itertools import pairwise
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
@@ -78,49 +79,27 @@ class AudioSplitter:
     def merge_segments_greedy(
         self, speech_segments: List[Tuple[int, int]], total_duration_ms: int
     ) -> List[Tuple[int, int]]:
-        """按语音活动区间重分段
+        """按语音活动区间边界切分整条时间轴
 
         策略：
-        1. 默认保留 语音活动原始边界，避免将整段连续语音合并成超长片段
-        2. 仅对短片段（< min_segment_ms）做邻段合并
-        3. 对重叠片段进行边界修正，避免重复音频
+        1. 活动区间边界只作为切点；区间之间的间隙同样作为独立片段送识别，
+           因为未检测到说话人活动不等于静音（低音量语音常落在间隙里）
+        2. 不把分离的语音区间打包进同一请求，段落拼接在识别之后进行
+        3. 仅对短片段（< min_segment_ms）做邻段合并，超长片段按最大时长切分
 
         Args:
             speech_segments: 已检测到的语音段列表 [(start_ms, end_ms), ...]
             total_duration_ms: 音频总时长（毫秒）
 
         Returns:
-            合并后的段列表 [(start_ms, end_ms), ...]
+            覆盖 [0, total_duration_ms] 的连续段列表 [(start_ms, end_ms), ...]
         """
-        if not speech_segments:
-            # 未检测到活动不等于静音；保留整个音频交给 ASR（按最大时长切分）
-            return self._split_by_fixed_duration(total_duration_ms)
-
-        # 按时间排序并修正边界（防止越界、重叠）
-        sorted_intervals = sorted(speech_segments, key=lambda x: x[0])
-        normalized: List[Tuple[int, int]] = []
-        for raw_start, raw_end in sorted_intervals:
-            start_ms = max(0, int(raw_start))
-            end_ms = min(total_duration_ms, int(raw_end))
-            if end_ms <= start_ms:
-                continue
-
-            if not normalized:
-                normalized.append((start_ms, end_ms))
-                continue
-
-            last_end = normalized[-1][1]
-            # 有重叠时，优先保持边界，避免与上一段重复采样
-            if start_ms < last_end:
-                start_ms = last_end
-
-            if end_ms > start_ms:
-                normalized.append((start_ms, end_ms))
-
-        if not normalized:
-            return self._split_by_fixed_duration(total_duration_ms)
-
-        merged = list(normalized)
+        edges = {
+            min(total_duration_ms, max(0, int(edge)))
+            for span in speech_segments
+            for edge in span
+        }
+        merged = list(pairwise(sorted(edges | {0, total_duration_ms})))
 
         # 只处理短片段：与相邻片段合并（不基于静音间隙）
         idx = 0
@@ -168,7 +147,7 @@ class AudioSplitter:
         ]
 
     def _split_by_fixed_duration(self, total_duration_ms: int) -> List[Tuple[int, int]]:
-        """按固定时长切分（无活动区间时保留音频的兜底）
+        """按固定时长切分超长片段
 
         Args:
             total_duration_ms: 音频总时长（毫秒）
@@ -204,8 +183,8 @@ class AudioSplitter:
         Args:
             audio_path: 音频文件路径
             output_dir: 输出目录（可选，默认使用临时目录）
-            speech_segments: 已知语音区间 [(start_ms, end_ms), ...]。给出时直接
-                复用；空列表仍按固定时长分割以保留识别兜底
+            speech_segments: 已知语音区间 [(start_ms, end_ms), ...]，仅作为切点；
+                输出片段始终覆盖完整音频
 
         Returns:
             音频片段列表
