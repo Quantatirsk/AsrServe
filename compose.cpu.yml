@@ -1,0 +1,14 @@
+name: r2t2-asr-cpu
+services:
+  asr:
+    image: quantatrisk/qwen3-asr:cpu
+    ports:
+      - "17003:8000"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./models:/app/models

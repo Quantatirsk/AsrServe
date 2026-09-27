@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
+# Download the pinned models into ./models with an image built by build.sh.
+# No GPU is needed. CPU image: IMAGE=quantatrisk/qwen3-asr:cpu ./scripts/prepare-models.sh
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-export NEMOTRON_MODEL_PATH="${NEMOTRON_MODEL_PATH:-$PWD/models/nemotron-3-diarization}"
-export HF_HOME="${HF_HOME:-$PWD/models/huggingface}"
-UV_ARGS=(--frozen)
-if [ "$(uname -s)" = Linux ]; then
-  if [ "${DEVICE:-cuda:0}" = cpu ] || [ "${DEVICE:-cuda:0}" = npu:0 ]; then
-    UV_ARGS+=(--extra cpu)
-  else
-    UV_ARGS+=(--extra cuda)
-  fi
-fi
-exec uv run "${UV_ARGS[@]}" python -m app.utils.download_models "$@"
+mkdir -p models
+exec docker run --rm -e HF_ENDPOINT -v "$PWD/models:/app/models" \
+  "${IMAGE:-quantatrisk/qwen3-asr:gpu}" --download-models

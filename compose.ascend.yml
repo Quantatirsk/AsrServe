@@ -1,0 +1,23 @@
+name: r2t2-asr-ascend
+services:
+  asr:
+    image: quantatrisk/qwen3-asr:ascend
+    ports:
+      - "17003:8000"
+    shm_size: 1gb
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file:
+      - path: .env
+        required: false
+    devices:
+      - /dev/davinci0
+      - /dev/davinci_manager
+      - /dev/devmm_svm
+      - /dev/hisi_hdc
+    volumes:
+      - ./models:/app/models
+      - /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
+      - /usr/local/dcmi:/usr/local/dcmi:ro
+      - /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro

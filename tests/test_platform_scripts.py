@@ -1,4 +1,4 @@
-"""Model preparation must select the same dependencies as deployment."""
+"""Model preparation must run inside the selected service image."""
 import os
 from pathlib import Path
 import subprocess
@@ -7,29 +7,16 @@ import unittest
 
 
 class PlatformScriptsTest(unittest.TestCase):
-    def test_prepare_models_selects_platform_extra(self):
+    def test_prepare_models_runs_service_image_without_devices(self):
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
-            for name, body in {
-                'uname': 'echo "$TEST_PLATFORM"',
-                'uv': 'printf "%s\\n" "$@"',
-            }.items():
-                script = Path(directory) / name
-                script.write_text('#!/bin/sh\n' + body + '\n')
-                script.chmod(0o755)
-            for platform, device, extra in [
-                ('Linux', 'cpu', 'cpu'),
-                ('Linux', 'cuda:0', 'cuda'),
-                ('Darwin', 'cpu', None),
-            ]:
-                with self.subTest(platform=platform, device=device):
-                    env = dict(os.environ, PATH=f'{directory}:{os.environ["PATH"]}',
-                               TEST_PLATFORM=platform, DEVICE=device)
-                    result = subprocess.check_output(
-                        ['bash', str(root / 'scripts/prepare-models.sh'),
-                         '--export-dir', '/tmp/model export'], env=env, text=True,
-                    ).splitlines()
-                    self.assertEqual(result, ['run', '--frozen'] +
-                                     (['--extra', extra] if extra else []) +
-                                     ['python', '-m', 'app.utils.download_models',
-                                      '--export-dir', '/tmp/model export'])
+            docker = Path(directory) / 'docker'
+            docker.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            docker.chmod(0o755)
+            env = dict(os.environ, PATH=f'{directory}:{os.environ["PATH"]}')
+            result = subprocess.check_output(
+                ['bash', str(root / 'scripts/prepare-models.sh')], env=env, text=True,
+            ).splitlines()
+        self.assertEqual(result, ['run', '--rm', '-e', 'HF_ENDPOINT', '-v',
+                                  f'{root}/models:/app/models',
+                                  'quantatrisk/qwen3-asr:gpu', '--download-models'])

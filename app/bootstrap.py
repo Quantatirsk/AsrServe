@@ -20,7 +20,7 @@ def ensure_models_downloaded() -> bool:
                 missing,
             )
             return False
-        return download_models(auto_mode=True)
+        return download_models()
     except Exception:
         logger.exception("Model preparation failed")
         return False

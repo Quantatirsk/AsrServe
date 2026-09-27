@@ -4,7 +4,7 @@ FROM nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    HF_HOME=/root/.cache/huggingface \
+    HF_HOME=/app/models/huggingface \
     HF_HUB_DISABLE_PROGRESS_BARS=1 \
     TOKENIZERS_PARALLELISM=false \
     PATH=/opt/venv/bin:$PATH \

@@ -1,19 +1,9 @@
-"""Download, verify and export the single supported model set."""
-
-import argparse
-import shutil
-from pathlib import Path
+"""Download and verify the single supported model set."""
 
 from huggingface_hub import snapshot_download as hf_snapshot_download
 
-from app.infrastructure import (
-    get_huggingface_cache_root,
-    get_huggingface_model_cache_dir,
-    is_huggingface_offline,
-)
-from app.services.asr.model_capabilities import (
-    get_huggingface_assets,
-)
+from app.infrastructure import is_huggingface_offline
+from app.services.asr.model_capabilities import get_huggingface_assets
 
 
 def check_all_models() -> list[tuple[str, str, str | None]]:
@@ -31,7 +21,7 @@ def check_all_models() -> list[tuple[str, str, str | None]]:
     ]
 
 
-def download_models(auto_mode: bool = False, export_dir: str | None = None) -> bool:
+def download_models() -> bool:
     missing = check_all_models()
     if missing and is_huggingface_offline():
         print(
@@ -55,38 +45,6 @@ def download_models(auto_mode: bool = False, export_dir: str | None = None) -> b
     if check_all_models():
         print("Model integrity check failed after download")
         return False
-    if export_dir:
-        destination = Path(export_dir)
-        for asset in assets:
-            source = (
-                Path(asset.local_dir)
-                if asset.local_dir
-                else get_huggingface_model_cache_dir(asset.model_id)
-            )
-            if asset.local_dir:
-                target = destination / "nemotron-3-diarization"
-            else:
-                target = (
-                    destination
-                    / "huggingface/hub"
-                    / source.relative_to(get_huggingface_cache_root())
-                )
-            if source.resolve() != target.resolve():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(source, target, dirs_exist_ok=True)
-        print("Exported model assets to", destination)
-    if not auto_mode:
-        print("All required models are ready")
+    print("All required models are ready")
     return True
 
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--export-dir")
-    parser.add_argument("--auto-mode", action="store_true")
-    args = parser.parse_args()
-    return 0 if download_models(args.auto_mode, args.export_dir) else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

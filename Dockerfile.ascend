@@ -5,7 +5,7 @@ FROM ${VLLM_ASCEND_IMAGE}
 USER root
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    HF_HOME=/root/.cache/huggingface \
+    HF_HOME=/app/models/huggingface \
     HF_HUB_DISABLE_PROGRESS_BARS=1 \
     TOKENIZERS_PARALLELISM=false \
     UV_PROJECT_ENVIRONMENT=/opt/api-venv \
@@ -14,7 +14,6 @@ ENV PYTHONUNBUFFERED=1 \
     DEVICE=npu:0 \
     ALIGNMENT_MODE=uniform \
     SPEAKER_DIARIZATION_DEVICE=cpu \
-    NEMOTRON_MODEL_PATH=/models/nemotron-3-diarization \
     OMP_NUM_THREADS=4 \
     OPENBLAS_NUM_THREADS=4 \
     VLLM_NO_USAGE_STATS=1
@@ -37,7 +36,7 @@ RUN uv sync --frozen --no-dev --no-install-project --extra cpu \
 COPY app ./app
 COPY deploy ./deploy
 COPY start.py ./
-RUN mkdir -p temp logs /models
+RUN mkdir -p temp logs
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
     CMD ["/opt/api-venv/bin/python", "/app/start.py", "--healthcheck"]

@@ -6,29 +6,32 @@
 - Nemotron 提供说话人分离；910B 使用明确标记的均分时间戳，CPU/CUDA 使用 Qwen3-ForcedAligner。
 - 提供 OpenAI 兼容转写接口和浏览器录音页面。
 
-## Ascend 910B 分支
+## Ascend 910B
 
-已同步 `dev@3af1c97` 的 R2T2 + Nemotron。910B 使用单容器双 Python 环境：R2T2 上 NPU，Nemotron 在 CPU；时间戳采用明确标记的均分估算。旧 Qwen3-ASR/FSMN/CAM++ 入口已移除。
+单容器双 Python 环境：R2T2 在 NPU，Nemotron 在 CPU；时间戳为明确标记的均分估算。
 
-使用 `docker compose -f docker-compose.yml up -d --build`，详见 [910B 部署与烟测说明](docs/deployment-ascend.md)。仅完成本地烟测，未做 NPU 实机验证。
+```bash
+TARGET=ascend ./build.sh
+docker compose -f compose.ascend.yml up -d
+```
+
+详见 [910B 部署说明](docs/deployment-ascend.md)。已完成本地烟测，尚未做 NPU 实机验收。
 
 ## Docker 启动
 
-先按[部署说明](docs/deployment.md)准备模型，然后启动：
-
 ```bash
-# 默认 GPU：compose.yml
-docker compose up -d --build
+# GPU：镜像 quantatrisk/qwen3-asr:gpu，配置 compose.yml
+./build.sh
+docker compose up -d
 
-# CPU：compose.cpu.yaml
-docker compose -f compose.cpu.yaml up -d --build
+# CPU：镜像 quantatrisk/qwen3-asr:cpu，配置 compose.cpu.yml
+TARGET=cpu ./build.sh
+docker compose -f compose.cpu.yml up -d
 ```
 
-两份配置分别使用，不要叠加。镜像统一为 `quantatrisk/qwen3-asr:latest`；切换后端需要重新构建。
+Compose 只引用镜像、不含构建参数；代码更新后重新执行 `build.sh` 再 `up -d`。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
 
-默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。
-
-`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
+默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 
 ## 文件转写
 
