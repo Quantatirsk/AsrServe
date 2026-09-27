@@ -7,6 +7,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import time
 
 LABEL = "com.asrserve.native"
 
@@ -64,6 +65,17 @@ def main() -> None:
     )
     if loaded:
         subprocess.run(["launchctl", "bootout", target], check=True)
+        # bootout returns before launchd finishes removing the job.
+        deadline = time.monotonic() + 60
+        while (
+            subprocess.run(
+                ["launchctl", "print", target], capture_output=True
+            ).returncode
+            == 0
+        ):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Previous ASR service has not stopped")
+            time.sleep(0.2)
     if args.action == "uninstall":
         agent.unlink(missing_ok=True)
         print("Native ASR login service removed; models and logs retained")
