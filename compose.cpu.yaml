@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile.cpu
     ports:
-      - "${ASR_PORT:-4174}:8000"
+      - "${ASR_PORT:-17003}:8000"
     init: true
     restart: unless-stopped
     stop_grace_period: 60s

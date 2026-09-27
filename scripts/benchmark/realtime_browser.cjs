@@ -13,7 +13,7 @@ const { chromium } = require('playwright');
       const page = await browser.newPage({viewport: {width, height}});
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
-      await page.goto((process.env.ASR_URL || 'http://localhost:4174') + '/realtime');
+      await page.goto((process.env.ASR_URL || 'http://localhost:17003') + '/realtime');
       if (process.env.API_KEY) await page.locator('#key').fill(process.env.API_KEY);
       for (let run = 0; run < 2; run++) {
         await page.locator('#start').click();

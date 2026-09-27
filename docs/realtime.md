@@ -4,7 +4,7 @@
 
 ## WebSocket 协议
 
-连接 `ws://host:4174/v1/stream`。启用鉴权时使用 `Authorization: Bearer <API_KEY>`，浏览器可使用 `?token=...`。首条消息发送 `{}`，或带热词上下文：
+连接 `ws://host:17003/v1/stream`。启用鉴权时使用 `Authorization: Bearer <API_KEY>`，浏览器可使用 `?token=...`。首条消息发送 `{}`，或带热词上下文：
 
 ```json
 {"context":"网易有道，Qwen，R2T2"}
@@ -42,7 +42,7 @@ GPU 默认支持 4 个会话，CPU 默认 1 个。GPU 离线最多并行识别 8
 
 ```bash
 uv run --no-sync python -m scripts.benchmark.realtime_smoke zh.wav en.wav \
-  --url http://127.0.0.1:4174 --concurrency 4 \
+  --url http://127.0.0.1:17003 --concurrency 4 \
   --output benchmark_results/r2t2-acceptance.json
 ```
 

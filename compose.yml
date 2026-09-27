@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile.gpu
     ports:
-      - "${ASR_PORT:-4174}:8000"
+      - "${ASR_PORT:-17003}:8000"
     shm_size: 4gb
     init: true
     restart: unless-stopped

@@ -20,14 +20,14 @@ docker compose -f compose.cpu.yaml up -d --build
 
 两份配置分别使用，不要叠加。镜像统一为 `quantatrisk/qwen3-asr:latest`；切换后端需要重新构建。
 
-默认地址为 `http://localhost:4174`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/stream/v1/asr/health`。
+默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/stream/v1/asr/health`。
 
 `.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 
 ## 文件转写
 
 ```bash
-curl http://localhost:4174/v1/audio/transcriptions \
+curl http://localhost:17003/v1/audio/transcriptions \
   -F file=@recording.wav \
   -F model=confucius4-r2t2 \
   -F response_format=verbose_json \

@@ -178,7 +178,7 @@ async def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("audio", nargs="+", type=Path)
-    parser.add_argument("--url", default="http://127.0.0.1:4174")
+    parser.add_argument("--url", default="http://127.0.0.1:17003")
     parser.add_argument("--api-key", default=os.getenv("API_KEY", ""))
     parser.add_argument("--seconds", type=float, default=7)
     parser.add_argument("--concurrency", type=int, default=4)

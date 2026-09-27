@@ -18,7 +18,7 @@ docker compose logs -f asr
 
 CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -f compose.cpu.yaml build`。两份配置独立使用，镜像都叫 `quantatrisk/qwen3-asr:latest`；切换后端执行对应的 `up -d --build`，避免复用另一后端的同名镜像。已准备完整模型时可跳过下载。
 
-默认端口 4174。浏览器录音需要 localhost 或 HTTPS；反向代理须支持 WebSocket Upgrade，并给长录音请求足够的上传大小和超时时间。
+默认端口 17003。浏览器录音需要 localhost 或 HTTPS；反向代理须支持 WebSocket Upgrade，并给长录音请求足够的上传大小和超时时间。
 
 ## 配置
 
@@ -26,7 +26,7 @@ CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -
 
 | 参数 | 默认值 | 用途 |
 | --- | --- | --- |
-| `ASR_PORT` | `4174` | 宿主机端口 |
+| `ASR_PORT` | `17003` | 宿主机端口 |
 | `ASR_GPU` | `0` | 宿主机 GPU 编号 |
 | `API_KEY` | 空 | 公共接口鉴权 |
 | `HF_HUB_OFFLINE` | `0` | 模型齐全后设为 `1` 禁止下载 |
@@ -70,7 +70,7 @@ DEVICE=cpu OPENBLAS_NUM_THREADS=8 uv run --no-sync python start.py
 
 ```bash
 docker compose ps
-curl http://localhost:4174/stream/v1/asr/health
+curl http://localhost:17003/stream/v1/asr/health
 ```
 
 配置鉴权时添加 `Authorization: Bearer <API_KEY>`。文件转写示例见 [README](../README.md)，实时与并发验收见 [benchmark](../scripts/benchmark/README.md)。
