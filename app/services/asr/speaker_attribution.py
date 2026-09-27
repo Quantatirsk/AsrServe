@@ -18,7 +18,6 @@ MIN_SPEAKER_COVERAGE = 0.5
 MATERIAL_SPEAKER_COVERAGE = 0.2
 MAX_TURN_GAP_SECONDS = 1.0
 MAX_PARAGRAPH_SECONDS = 30.0
-MIN_MAIN_SPEECH_SECONDS = 4.0
 MAX_INTERJECTION_SECONDS = 2.0
 
 
@@ -48,14 +47,11 @@ def consolidate_speaker_turns(
 
     Brief interruptions inherit the surrounding main speaker for paragraph
     presentation only. Every text character and aligned word instant survives.
-    Thresholds use the final recording timeline, after any sample-rate scaling.
+    Count interruption spans without pauses between them; short main turns
+    qualify too. Thresholds use the final, sample-rate-scaled recording timeline.
     """
     turns: list[ASRSegmentResult] = []
-    speech: list[float] = []
     for segment in segments:
-        duration = sum(
-            word.end_time - word.start_time for word in segment.word_tokens or []
-        )
         if (
             turns
             and segment.speaker_id is not None
@@ -64,13 +60,10 @@ def consolidate_speaker_turns(
             and segment.end_time - turns[-1].start_time <= MAX_PARAGRAPH_SECONDS
         ):
             turns[-1] = _join_turns([turns[-1], segment])
-            speech[-1] += duration
         else:
             turns.append(segment)
-            speech.append(duration)
 
     output: list[ASRSegmentResult] = []
-    main_speech = 0.0
     index = 0
     while index < len(turns):
         if output and output[-1].speaker_id is not None:
@@ -78,31 +71,25 @@ def consolidate_speaker_turns(
             absorbed = False
             end = index
             previous = main
+            interruption_seconds = 0.0
             while end < len(turns):
                 candidate = turns[end]
                 if candidate.start_time - previous.end_time > MAX_TURN_GAP_SECONDS:
                     break
                 if candidate.speaker_id == main.speaker_id:
-                    if (
-                        end > index
-                        and main_speech + speech[end] >= MIN_MAIN_SPEECH_SECONDS
-                    ):
+                    if end > index:
                         output[-1] = _join_turns([main, *turns[index : end + 1]])
-                        main_speech += speech[end]
                         index = end + 1
                         absorbed = True
                     break
-                if (
-                    candidate.end_time - turns[index].start_time
-                    >= MAX_INTERJECTION_SECONDS
-                ):
+                interruption_seconds += candidate.end_time - candidate.start_time
+                if interruption_seconds >= MAX_INTERJECTION_SECONDS:
                     break
                 previous = candidate
                 end += 1
             if absorbed:
                 continue
         output.append(turns[index])
-        main_speech = speech[index]
         index += 1
     return output
 

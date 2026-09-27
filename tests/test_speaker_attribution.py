@@ -225,6 +225,29 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual([w[0] for w in before], [w[0] for w in after])
         np.testing.assert_allclose([w[1:] for w in before], [w[1:] for w in after])
 
+    def test_one_second_interjection_with_pauses_merges_into_main_speaker(self) -> None:
+        source = [
+            turn("Before. ", 0, 3, "A"),
+            turn("Yes. ", 3.1, 3.9, "B"),
+            turn("Mixed. ", 4.79, 5.11, None),
+            turn("Continue.", 5.27, 8.27, "A"),
+        ]
+        result = consolidate_speaker_turns(source)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].speaker_id, "A")
+        self.assert_preserved(source, result)
+
+    def test_short_main_turns_still_absorb_brief_interjection(self) -> None:
+        source = [
+            turn("Before. ", 0, 1, "A"),
+            turn("Yes. ", 1, 1.5, "B"),
+            turn("Continue.", 1.5, 2.5, "A"),
+        ]
+        result = consolidate_speaker_turns(source)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].speaker_id, "A")
+        self.assert_preserved(source, result)
+
     def test_adjacent_main_speaker_groups_merge_and_rebase_words(self) -> None:
         source = [turn("First. ", 10, 12, "A"), turn("Next!", 13, 15, "A")]
         result = consolidate_speaker_turns(source)
@@ -261,11 +284,6 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
             [a, short, turn("Different.", 3.5, 6.5, "C")],
             [a, short, turn("Delayed.", 4.51, 7.51, "A")],
             [a, turn("Delayed. ", 4.01, 4.51, "B"), turn("Return.", 4.51, 7.51, "A")],
-            [
-                turn("Short. ", 0, 1, "A"),
-                turn("Brief. ", 1, 1.5, "B"),
-                turn("Short.", 1.5, 2.5, "A"),
-            ],
             [
                 a,
                 turn("First. ", 3, 4, "B"),
@@ -307,7 +325,7 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assert_preserved(source, result)
 
-    def test_silence_inside_main_groups_does_not_supply_speech_support(self) -> None:
+    def test_sparse_aligned_words_do_not_prevent_paragraph_consolidation(self) -> None:
         source = [
             turn("Sparse. ", 0, 10, "A"),
             turn("Brief. ", 10, 10.5, "B"),
@@ -315,7 +333,9 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         ]
         source[0].word_tokens[0].end_time = 1
         source[2].word_tokens[0].end_time = 1
-        self.assertEqual(consolidate_speaker_turns(source), source)
+        result = consolidate_speaker_turns(source)
+        self.assertEqual(len(result), 1)
+        self.assert_preserved(source, result)
         self.assertEqual(consolidate_speaker_turns([]), [])
 
 

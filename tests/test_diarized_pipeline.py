@@ -212,10 +212,9 @@ class DiarizedPipelineTest(unittest.TestCase):
         result = self.transcribe(word_timestamps=False)
         self.assertEqual(self.engine.aligner.align_transcript.call_count, 2)
         self.assertTrue(all(segment.word_tokens is None for segment in result.segments))
-        self.assertEqual(result.segments[1].speaker_id, "speaker-2")
-        self.assertEqual(
-            result.segments[2].speaker_candidates, ["speaker-1", "speaker-2"]
-        )
+        self.assertEqual(len(result.segments), 1)
+        self.assertEqual(result.segments[0].speaker_id, "speaker-1")
+        self.assertEqual(result.segments[0].text, "First. Yes! Mixed.After.")
         self.assertEqual(result.speaker_segments, self.spans)
         self.assert_cleaned()
 
