@@ -1,39 +1,28 @@
-# R2T2 ASR
+# Qwen3 ASR
 
-本分支提供基于 Confucius4-R2T2 的实时与离线语音识别服务，支持 Linux x86_64 / NVIDIA CUDA，以及 macOS Apple Silicon / Rust CPU。实时与离线共用一个 R2T2 推理实例，权重只加载一次；各请求保留独立的音频与解码状态。
+基于 Confucius4-R2T2 的实时与离线语音识别服务，支持 NVIDIA GPU、Linux CPU（amd64/arm64）和 macOS Apple Silicon CPU。
 
-离线流程为：完整录音 → 按非重叠语音区间进行 R2T2 重新识别 → 强制对齐 → 关联 Nemotron 的说话人活跃区间 → 合并带主讲者、时间戳的段落。Nemotron 独立处理完整录音，保留重叠区间；同一混合音频只识别一次。离线识别不读取实时转写文本。保留 FSMN VAD 和 Qwen3-ForcedAligner-0.6B；强制对齐模型仅生成时间戳，不承担文字识别。
+- 实时与离线共用一份 R2T2 权重；离线独立识别原始录音。
+- Nemotron 提供说话人分离，Qwen3-ForcedAligner 提供字词时间戳。
+- 提供 OpenAI 兼容转写接口、阿里云兼容接口和浏览器录音页面。
 
-启用说话人分离时内部始终进行字词对齐，`word_timestamps` 仍只控制是否公开字词时间戳。相邻同人段在间隔不超过 1 秒、合并后不超过 30 秒时合并。夹在同一主讲者发言之间、不足 2 秒的短暂插话或未知归属段，在各处间隔不超过 1 秒且前后主讲者已对齐发言累计至少 4 秒时并入主讲者段落，不单独标注；文字及字词绝对时间均保留，段内相对时间重新计算。独立短回答、真正换人和长停顿不会按此规则吞并。
+## Docker 启动
 
-OpenAI `verbose_json` 和阿里云响应通过 `speaker_segments` 保留原始重叠活动区间；`segments` 的说话人表示段落主讲者，不保证每个字都由该人发出。未被吸收的未知段不设置说话人，存在候选时返回 `speaker_candidates`。活动区间的 `confidence` 是平均活跃概率，不是身份识别准确率。
-
-离线识别使用独立 CPU CT-Transformer 恢复缺少的句末标点，沿用 FunASR 的句末句号补全策略。仅追加模型输出的最后一个标点，保留原始文字、数字和句内标点；已带句末标点的文本不重复处理。
-
-数字保留 R2T2 原始写法，不再运行 WeText 强制 ITN，避免将“有一点高”“这一块”改成“有1点高”“这1块”。模型原本输出的中文数字和阿拉伯数字均保留；这不等于已实现按语境统一金额、日期、数量表达的排版策略。
-
-## 启动
-
-安装 NVIDIA 驱动、Docker 和 NVIDIA Container Toolkit 后：
+先按[部署说明](docs/deployment.md)准备模型，然后启动：
 
 ```bash
-cp .env.example .env
-./scripts/prepare-models.sh
+# 默认 GPU：compose.yml
 docker compose up -d --build
-docker compose logs -f asr
+
+# CPU：compose.cpu.yaml
+docker compose -f compose.cpu.yaml up -d --build
 ```
 
-默认使用 GPU 0，服务地址为 `http://localhost:4174`，录音页面 `/realtime`，API 文档 `/docs`。先将模型准备到 `models/`，Nemotron 目录以只读方式挂载；准备完成后可以设置 `HF_HUB_OFFLINE=1`。显存预算需要按硬件调整，详见 [部署说明](docs/deployment.md)。
+两份配置分别使用，不要叠加。镜像统一为 `quantatrisk/qwen3-asr:latest`；切换后端需要重新构建。
 
-macOS 使用原生进程，安装 Rust 工具链后：
+默认地址为 `http://localhost:4174`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/stream/v1/asr/health`。
 
-```bash
-uv sync --frozen
-./scripts/build-rust.sh
-DEVICE=cpu R2T2_MAX_SESSIONS=1 uv run python start.py
-```
-
-本地服务地址为 `http://localhost:8000`。macOS 默认选择 CPU，Linux 默认选择 `cuda:0`；显式选择 CUDA 但不可用时启动失败，不自动降级。CPU 线程数默认 8，可通过 `R2T2_CPU_THREADS` 调整。CPU 默认每 640ms 解码，CUDA 默认 160ms；用 `R2T2_CHUNK_SECONDS` 调整解码频率，停顿检测仍按小音频帧处理。完整对照数据和限制见 [CPU PoC](experiments/r2t2_cpu/README.md)。
+`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 
 ## 文件转写
 
@@ -41,28 +30,30 @@ DEVICE=cpu R2T2_MAX_SESSIONS=1 uv run python start.py
 curl http://localhost:4174/v1/audio/transcriptions \
   -F file=@recording.wav \
   -F model=confucius4-r2t2 \
-  -F word_timestamps=true \
   -F response_format=verbose_json \
-  -F enable_speaker_diarization=true
+  -F enable_speaker_diarization=true \
+  -F word_timestamps=true
 ```
 
-模型列表仅返回 `confucius4-r2t2`。文件转写请求中的 `model` 参数可填写任意值，服务忽略该参数并始终使用 R2T2，不按名称选择或路由模型。支持 `/v1/audio/transcriptions` 和 `/stream/v1/asr` 下的离线接口；完整参数以 `/docs` 为准。
+配置 `API_KEY` 后添加 `Authorization: Bearer <API_KEY>`。`model` 参数不切换模型，服务始终使用 R2T2。说话人段落表示主讲者，重叠活动另存于 `speaker_segments`；分离说话人不等于分离干净音轨。
 
-实时接口为 `/v1/stream`，使用 16 kHz 单声道 PCM，通过 WebSocket 返回追加式文本；协议见 [实时转写](docs/realtime.md)。实时不提供说话人标签和词级时间戳。
+实时接口 `/v1/stream` 使用 16 kHz 单声道 PCM，协议见[实时转写](docs/realtime.md)。
 
-## 开发与验证
+## 本地开发
+
+需要 Python 3.11–3.12、uv 和 FFmpeg；CPU 后端还需要 Rust。
 
 ```bash
-uv sync --frozen
-uv run python start.py
-uv run python -m pytest tests
+uv sync --frozen --extra cuda  # Linux CPU 改为 --extra cpu；macOS 去掉 --extra cuda
+uv run --no-sync python start.py
+uv run --no-sync python -m pytest tests
 ```
 
-依赖分别为 Linux CUDA 和 macOS ARM64 锁定，macOS 不安装 vLLM 或 CUDA 包。模型质量、内存及吞吐量必须在对应硬件上使用真实录音验收；本地逻辑测试不能替代模型推理验证。
+CPU 原生构建、模型缓存和平台限制见[部署说明](docs/deployment.md)；验收脚本见 [scripts/benchmark](scripts/benchmark/README.md)。
 
 ## 上游
 
-- [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2)：实时与离线识别；源码归属见 `deploy/R2T2-NOTICE`，权重遵循上游独立 MODEL_LICENSE。
-- [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR)：保留其中的 Qwen3-ForcedAligner-0.6B 强制对齐能力。
-- [NVIDIA Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization)：唯一说话人分离模型，原生 Transformers FP32 推理，最多支持 8 个说话人。
-- [FunASR](https://github.com/modelscope/FunASR)：FSMN VAD 与 CT-Transformer 标点模型。
+- [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2)：语音识别；源码归属见 `deploy/R2T2-NOTICE`，权重遵循独立 MODEL_LICENSE。
+- [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR)：强制对齐。
+- [Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization)：说话人分离。
+- [FunASR](https://github.com/modelscope/FunASR)：VAD 与句末标点恢复。

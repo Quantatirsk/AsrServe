@@ -37,6 +37,26 @@ class DiarizationResult:
     duration: float
     speaker_ids: tuple[str | None, ...]
 
+    def speech_intervals_ms(self) -> list[tuple[int, int]]:
+        """Union speaker activity into speech intervals for offline segmentation.
+
+        Nemotron's official extraction already smooths frame-level noise, so the
+        offline splitter reuses these intervals instead of running a second
+        full-recording VAD pass over the same audio. Gaps between intervals are
+        silence, which is exactly where a segment boundary belongs.
+        """
+        merged: list[list[int]] = []
+        for span in sorted(self.segments, key=lambda span: span.start_sec):
+            start = max(0, round(span.start_sec * 1000))
+            end = round(span.end_sec * 1000)
+            if end <= start:
+                continue
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        return [(start, end) for start, end in merged]
+
 
 class SpeakerDiarizer:
     SAMPLE_RATE = 16000

@@ -1,0 +1,32 @@
+name: r2t2-asr
+services:
+  asr:
+    image: quantatrisk/qwen3-asr:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "${ASR_PORT:-4174}:8000"
+    shm_size: 4gb
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${ASR_GPU:-0}"]
+              capabilities: [gpu]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DEVICE: cuda:0
+    volumes:
+      - ./logs:/app/logs
+      - ./models/nemotron-3-diarization:/app/models/nemotron-3-diarization:ro
+      - ./models/modelscope:/root/.cache/modelscope
+      - ./models/huggingface:/root/.cache/huggingface
+      - ./.cache/vllm:/root/.cache/vllm

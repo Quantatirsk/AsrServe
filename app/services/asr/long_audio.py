@@ -129,9 +129,18 @@ def prepare_long_audio(
                 from app.utils.speaker_diarizer import get_speaker_diarizer
 
                 diarization = get_speaker_diarizer().diarize(audio_path)
-            # Recognition never duplicates overlapping speaker intervals.
+            # Recognition never duplicates overlapping speaker intervals. When
+            # diarization ran, its activity intervals already describe speech, so
+            # the splitter reuses them instead of running FSMN VAD over the same
+            # recording; VAD remains the fallback when diarization is disabled.
             segments = AudioSplitter(device=device).split_audio_file(
-                audio_path, output_dir=directory
+                audio_path,
+                output_dir=directory,
+                speech_segments=(
+                    diarization.speech_intervals_ms()
+                    if diarization is not None
+                    else None
+                ),
             )
             yield PreparedLongAudio(segments, duration, diarization)
             status = "success"

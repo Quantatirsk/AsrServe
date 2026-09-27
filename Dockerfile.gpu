@@ -5,13 +5,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/root/.cache/huggingface \
-    HF_HUB_CACHE=/root/.cache/huggingface/hub \
     HF_HUB_DISABLE_PROGRESS_BARS=1 \
     TOKENIZERS_PARALLELISM=false \
     PATH=/opt/venv/bin:$PATH \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
-    UV_OVERRIDE="" \
-    VLLM_WORKER_MULTIPROC_METHOD=spawn
+    OMP_NUM_THREADS=4 \
+    OPENBLAS_NUM_THREADS=4 \
+    VLLM_NO_USAGE_STATS=1
 
 # CUDA's development image supplies nvcc for runtime FlashInfer compilation.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,13 +22,13 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    env -u UV_OVERRIDE uv sync --frozen --no-dev --no-install-project \
+    env -u UV_OVERRIDE uv sync --frozen --no-dev --no-install-project --extra cuda \
     && uv pip check --python /opt/venv/bin/python
 RUN python -c "import torch, torchaudio, transformers, vllm; from transformers import PreTrainedModel, AutoModelForAudioFrameClassification, AutoProcessor"
 COPY app /app/app
 COPY deploy /app/deploy
 COPY start.py /app/start.py
-RUN mkdir -p /app/temp /app/data /app/logs
+RUN mkdir -p /app/temp /app/logs
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=10s --start-period=600s --retries=3 \
     CMD ["python", "/app/start.py", "--healthcheck"]

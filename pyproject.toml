@@ -1,7 +1,7 @@
 [project]
 name = "qwen3-asr"
 version = "1.0.3"
-description = "R2T2 offline and streaming speech recognition for CUDA and macOS CPU"
+description = "R2T2 offline and streaming speech recognition for CUDA and CPU"
 requires-python = ">=3.11,<3.13"
 dependencies = [
   "fastapi==0.136.3",
@@ -24,16 +24,27 @@ dependencies = [
   "loguru==0.7.2",
   "rich>=13.9,<14",
   "setuptools>=70.0.0,<81",
-  "torch==2.13.0; sys_platform == 'linux'",
   "torch==2.10.0; sys_platform == 'darwin'",
-  "torchaudio==2.11.0; sys_platform == 'linux'",
   "torchaudio==2.10.0; sys_platform == 'darwin'",
-  "torchvision==0.28.0; sys_platform == 'linux'",
   "torchvision==0.25.0; sys_platform == 'darwin'",
   "transformers @ https://github.com/huggingface/transformers/archive/27166ea03f12c940f23176a904ab1d2ff1a3dcbb.zip",
-  "flashinfer-cubin==0.6.18.post1; sys_platform == 'linux'",
-  "nvidia-nccl-cu13==2.29.7; sys_platform == 'linux'",
+]
+
+# Linux picks exactly one: `uv sync --extra cuda` or `uv sync --extra cpu`.
+# macOS needs neither; it installs PyPI PyTorch and runs R2T2 through Rust.
+[project.optional-dependencies]
+cuda = [
+  "torch==2.13.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "torchaudio==2.11.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "torchvision==0.28.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "flashinfer-cubin==0.6.18.post1; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-nccl-cu13==2.29.7; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "vllm[audio]==0.30.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+cpu = [
+  "torch==2.13.0; sys_platform == 'linux'",
+  "torchaudio==2.11.0; sys_platform == 'linux'",
+  "torchvision==0.28.0; sys_platform == 'linux'",
 ]
 
 [dependency-groups]
@@ -50,24 +61,34 @@ packages = []
 package = false
 environments = [
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
+conflicts = [[{ extra = "cuda" }, { extra = "cpu" }]]
 
 [tool.uv.sources]
 flashinfer-cubin = { index = "flashinfer" }
 torch = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
+  { index = "pytorch-cu130", extra = "cuda" },
+  { index = "pytorch-cpu", extra = "cpu" },
 ]
 torchaudio = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
+  { index = "pytorch-cu130", extra = "cuda" },
+  { index = "pytorch-cpu", extra = "cpu" },
 ]
 torchvision = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
+  { index = "pytorch-cu130", extra = "cuda" },
+  { index = "pytorch-cpu", extra = "cpu" },
 ]
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [[tool.uv.index]]

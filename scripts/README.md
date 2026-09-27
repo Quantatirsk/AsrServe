@@ -1,13 +1,10 @@
-# 开发脚本
+# 脚本
 
-运行环境为 Linux x86_64 / NVIDIA CUDA，依赖统一由根目录 `pyproject.toml` 和 `uv.lock` 管理。
+- `build.sh`（仓库根目录）：构建 GPU 镜像；`TARGET=cpu ./build.sh` 构建 CPU，统一标签 `quantatrisk/qwen3-asr:latest`。
+- `build-rust.sh`：构建原生 CPU 动态库。
+- `prepare-models.sh`：下载模型到 `models/`；`--export-dir /path` 导出离线模型。Linux CPU 设置 `DEVICE=cpu`。
+- `sync_gpu_env.sh`：安装锁定的 Linux CUDA 依赖。
+- `validate_nemotron.py`、`analyze_audio_rms.py`：说话人分离验收与音频能量检查。
+- `retire_realtime_models.py`：列出历史模型缓存候选，默认不删除。
 
-```bash
-./scripts/sync_gpu_env.sh
-./scripts/prepare-models.sh
-uv run python start.py
-```
-
-`prepare-models.sh` 下载当前服务的全部模型到 `models/`，可传 `--export-dir /path/to/models` 导出供离线部署。`build.sh` 构建本地 CUDA 镜像，默认标签为 `local/r2t2-asr:dev`，可用 `IMAGE_TAG` 覆盖。
-
-实时音频回放与并发验收见 [benchmark/README.md](benchmark/README.md)。`analyze_audio_rms.py` 可用于检查录音能量分布；`retire_realtime_models.py` 是独立的历史缓存清理工具，默认只列出候选目录，不参与服务启动。
+启动与配置见[部署说明](../docs/deployment.md)，回放与并发验收见 [benchmark](benchmark/README.md)。

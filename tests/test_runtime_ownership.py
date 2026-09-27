@@ -108,7 +108,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         engine.model_id = "confucius4-r2t2"
         engine.aligner = SimpleNamespace(align_transcript=Mock(return_value=[]))
 
-        def split(audio_path: str, output_dir: str) -> list[AudioSegment]:
+        def split(audio_path: str, output_dir: str, **_: object) -> list[AudioSegment]:
             chunk = Path(output_dir) / "chunk.wav"
             chunk.touch()
             return [AudioSegment(0, 1000, temp_file=str(chunk))]
@@ -204,7 +204,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         source = Path(directory) / "source.wav"
         source.touch()
 
-        def split(path: str, output_dir: str) -> list[AudioSegment]:
+        def split(path: str, output_dir: str, **_: object) -> list[AudioSegment]:
             (Path(output_dir) / "partial.wav").touch()
             raise ValueError("Decode failed")
 

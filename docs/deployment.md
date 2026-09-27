@@ -1,93 +1,82 @@
 # 部署
 
-Linux CUDA 标准入口为 `docker-compose.yml` 与 `Dockerfile.gpu`。镜像从 CUDA 13.0.2 开发镜像构建，使用 `uv.lock` 固定 Python 依赖，不依赖已有应用镜像。macOS Apple Silicon 使用原生 Rust CPU 进程，与 CUDA 共享服务协议和离线处理流程。
+## Docker
 
-## 启动和生命周期
+需要 Docker Compose 2.24+。GPU 还需 NVIDIA 驱动和 NVIDIA Container Toolkit，支持 Linux amd64；CPU 支持 Linux amd64/arm64，x86 要求 x86-64-v3（含 AVX2/FMA）。macOS/Windows 可使用 Docker Desktop 的 Linux 容器，Windows 尚未实机验收。
+
+默认 GPU 使用 `compose.yml`。首次部署先构建、下载模型，再启动：
 
 ```bash
-cp .env.example .env
-./scripts/prepare-models.sh
-docker compose up -d --build
+docker compose build
+# 模型准备时可写，正式服务中 Nemotron 仍只读挂载
+docker compose run --rm --no-deps \
+  -v ./models/nemotron-3-diarization:/app/models/nemotron-3-diarization \
+  --entrypoint python asr -m app.utils.download_models
+docker compose up -d
 docker compose logs -f asr
 ```
 
-`start.py` 先检查所选设备、准备全部模型，再依次启动私有 R2T2 引擎和公共 API。私有进程持有唯一的 R2T2 实例，CUDA 使用 AsyncLLM，CPU 使用 Rust，同时处理实时和离线识别，只监听 `127.0.0.1:8001`。公共 API 持有 VAD、Nemotron 与独立的强制对齐模型，将非重叠语音区间交给私有引擎重新识别，并将对齐后的字词关联到 Nemotron 说话人时间轴，不加载第二份 R2T2。外部只暴露 8000。任一进程异常退出，启动器关闭全部子进程；停止时先关闭公共入口，再释放共享模型。
+CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -f compose.cpu.yaml build`。两份配置独立使用，镜像都叫 `quantatrisk/qwen3-asr:latest`；切换后端执行对应的 `up -d --build`，避免复用另一后端的同名镜像。已准备完整模型时可跳过下载。
 
-就绪检查同时检查两个进程的模型状态。模型下载、加载和首次编译需要时间，镜像健康检查给予 600 秒启动期。大型模型下载较慢时，建议提前准备模型缓存。
+默认端口 4174。浏览器录音需要 localhost 或 HTTPS；反向代理须支持 WebSocket Upgrade，并给长录音请求足够的上传大小和超时时间。
 
-## macOS CPU
+## 配置
 
-使用 Apple Silicon、Python 3.11–3.12、uv 和 Rust 工具链，在仓库根目录执行：
+无需 `.env` 即可使用默认值。自定义时复制 `.env.example` 为 `.env`，只取消需要的注释。
 
-```bash
-uv sync --frozen
-./scripts/build-rust.sh
-DEVICE=cpu R2T2_CPU_THREADS=8 uv run python start.py
-```
-
-访问 `http://localhost:8000`。依赖锁覆盖 macOS ARM64 与 Linux x86_64；macOS 从 PyPI 安装 PyTorch，不安装 vLLM 或 CUDA 依赖。Rust 动态库由源码构建；设置 `CARGO_TARGET_DIR` 时构建脚本沿用该目录，运行时通过 `R2T2_CPU_LIBRARY_PATH` 指定输出的动态库路径。
-
-`DEVICE` 只接受 `cpu` 或 `cuda:0`，macOS 默认 `cpu`，Linux 默认 `cuda:0`。CUDA 不可用、模型缺失或 Rust 动态库缺失时直接报告错误，不改用其他后端。`R2T2_CPU_THREADS` 必须为正整数，默认 8，应结合目标设备的核心数和实际延迟调整。实时识别能否跟上音频输入、离线速度及量化后的质量须参考对应设备的实验结果，不以 CUDA 测试替代。
-
-## 显存与并发
-
-| 配置 | 默认值 | 用途 |
+| 参数 | 默认值 | 用途 |
 | --- | --- | --- |
-| `ASR_PORT` | `4174` | 宿主机 HTTP 端口 |
+| `ASR_PORT` | `4174` | 宿主机端口 |
 | `ASR_GPU` | `0` | 宿主机 GPU 编号 |
-| `API_KEY` | 空 | 公共接口 Bearer 鉴权 |
-| `R2T2_INTERNAL_TOKEN` | 空 | 容器内实时与离线接口鉴权 |
-| `R2T2_GPU_MEMORY_UTILIZATION` | `0.30` | 共享 R2T2 显存比例 |
-| `FORCED_ALIGNER_GPU_MEMORY_UTILIZATION` | `0.15` | 强制对齐显存比例 |
-| `R2T2_MAX_MODEL_LEN` | `16384` | 共享引擎上下文长度上限 |
-| `R2T2_MAX_SESSIONS` | `4` | 实时会话上限 |
-| `R2T2_ENFORCE_EAGER` | `0` | 共享引擎禁用 CUDA graph 开关 |
+| `API_KEY` | 空 | 公共接口鉴权 |
+| `HF_HUB_OFFLINE` | `0` | 模型齐全后设为 `1` 禁止下载 |
+| `HF_ENDPOINT` | 官方地址 | 可选 Hugging Face 镜像 |
+| `R2T2_GPU_MEMORY_UTILIZATION` | `0.30` | R2T2 显存比例 |
+| `FORCED_ALIGNER_GPU_MEMORY_UTILIZATION` | `0.15` | 对齐模型显存比例 |
+| `R2T2_CPU_THREADS` | `8` | Rust CPU 线程 |
+| `OPENBLAS_NUM_THREADS` | GPU `4`、CPU `8` | 矩阵运算线程 |
 
-两个显存比例都相对于整张 GPU；需要为 Nemotron FP32、CUDA 上下文和其他进程留余量。共享引擎只加载一份 R2T2 权重，额外请求仍占用 KV 缓存和工作空间；强制对齐模型继续独立加载。比例总和小于 1 并不保证可运行，必须按目标显卡进行加载、长音频和并发验收。
+显存比例均相对于整张显卡，需另给 Nemotron FP32 和运行时留空间。CPU 线程数按目标机器调节。
 
-实时请求使用较高调度优先级，离线每次只提交一个最长 60 秒的片段，调度序列上限为实时会话数加一。实时仍使用最多 16 秒的滚动音频窗口。共享 GPU 上的离线音频编码和强制对齐仍会竞争计算资源，调度优先级不构成实时延迟保证。
+应用参数通过 `.env` 传入容器；仅在宿主机 shell 中 export 不会自动传入。Compose 固定 `DEVICE`，会话数默认 GPU 4、CPU 1。需要时可在 `.env` 添加 `R2T2_MAX_SESSIONS`、`R2T2_MAX_MODEL_LEN`（16384）、`R2T2_ENFORCE_EAGER`（0）或 `R2T2_CHUNK_SECONDS`（GPU 0.16、CPU 0.64）。内部鉴权可设置 `R2T2_INTERNAL_TOKEN`。
 
-## 模型缓存
+## 模型与运行数据
 
-启动前运行准备脚本下载全部模型，持久化目录如下：
+- `models/huggingface`：R2T2 和强制对齐模型缓存。
+- `models/modelscope`：VAD 与标点模型缓存。
+- `models/nemotron-3-diarization`：Nemotron，正式服务只读挂载。
+- `logs`：应用日志；`.cache/vllm`：GPU 编译缓存。
 
-- `models/huggingface`：固定版本 R2T2 和强制对齐模型。
-- `models/modelscope`：FSMN VAD、CT-Transformer 标点模型。
-- `models/nemotron-3-diarization`：固定 revision 的 Nemotron，容器中只读挂载到 `/app/models/nemotron-3-diarization`。原生进程可通过 `NEMOTRON_MODEL_PATH` 指定目录。
-- `.cache/vllm`：vLLM 编译缓存。
+临时音频留在容器内。离线部署复制完整 `models/` 后，在 `.env` 设置 `HF_HUB_OFFLINE=1`；模型缺失时启动失败。
 
-联网的 Linux 开发环境可提前下载或导出：
+R2T2 revision 固定为 `185ce639118ad1362d049ca0d8ed04b6ec5cd6c9`，Nemotron revision 为 `f667ed73aee57d40cc39428eb768b4fd87a0a29e`。Python 依赖由 `uv.lock` 锁定。
+
+## 原生 CPU
+
+需要 Python 3.11–3.12、uv、Rust、FFmpeg；Linux 还需 libsndfile 和 OpenBLAS 开发库（Debian/Ubuntu：`libsndfile1 libopenblas-dev`）。macOS 支持 Apple Silicon。
 
 ```bash
-uv sync --frozen
-./scripts/prepare-models.sh
-./scripts/prepare-models.sh --export-dir /tmp/r2t2-models
+uv sync --frozen --extra cpu  # macOS 去掉 --extra cpu
+./scripts/build-rust.sh
+DEVICE=cpu ./scripts/prepare-models.sh
+HF_HOME="$PWD/models/huggingface" \
+MODELSCOPE_CACHE="$PWD/models/modelscope/hub" \
+DEVICE=cpu OPENBLAS_NUM_THREADS=8 uv run --no-sync python start.py
 ```
 
-导出目录包含 `huggingface/`、`modelscope/` 和 `nemotron-3-diarization/`；复制为部署目录下的 `models/`，再设置 `HF_HUB_OFFLINE=1` 启动。离线模式缺少任何必需模型时启动失败，不会改用其他模型。
+原生服务端口为 8000。使用自定义 `CARGO_TARGET_DIR` 时，另设置 `R2T2_CPU_LIBRARY_PATH` 指向构建的动态库。原生 Linux GPU 使用 `uv sync --frozen --extra cuda`；macOS 默认 CPU，Linux 默认 CUDA，不自动降级。
 
-Nemotron revision 固定为 `f667ed73aee57d40cc39428eb768b4fd87a0a29e`，模型使用官方离线配置和 FP32，支持最多 8 个说话人。它输出说话人活跃时间区间，不分离干净音轨；重叠发言的文字仍受单路 ASR 能力限制。
-
-Linux 依赖固定为 vLLM `0.30.0`、PyTorch `2.13.0+cu130`、torchaudio `2.11.0+cu130`、torchvision `0.28.0+cu130`、NCCL `2.29.7`。Transformers 使用 `5.18.0.dev0` 的已验证源码提交 `27166ea03f12c940f23176a904ab1d2ff1a3dcbb`，不是浮动开发版。macOS 保留 PyTorch/torchaudio `2.10.0` 与 torchvision `0.25.0`。所有模型共用一个 Python 环境；Nemotron 使用原生 Transformers，CUDA ASR 与强制对齐仍使用 vLLM。镜像预装匹配版本的 FlashInfer cubin，避免运行时下载内核；需要的 JIT 编译使用镜像自带的 nvcc。镜像安装时清除 `UV_OVERRIDE`，通过 `uv pip check` 检查依赖一致性。
-
-`HF_ENDPOINT` 可配置 Hugging Face 镜像。两种识别模式使用相同 R2T2 revision：`185ce639118ad1362d049ca0d8ed04b6ec5cd6c9`。
-
-## 反向代理
-
-浏览器录音需要 HTTPS 或 localhost；TLS 由外部反向代理提供。代理应允许 WebSocket Upgrade，并为离线长音频请求设置足够的请求体大小和超时时间。容器内没有额外的 nginx 或多 GPU 自动复制层。
-
-## 验收
+## 验证与边界
 
 ```bash
 docker compose ps
 curl http://localhost:4174/stream/v1/asr/health
-curl http://localhost:4174/v1/audio/transcriptions \
-  -F file=@recording.wav \
-  -F model=confucius4-r2t2 \
-  -F word_timestamps=true \
-  -F response_format=verbose_json
 ```
 
-开启鉴权时添加 `Authorization: Bearer ...`。对同一份真实录音检查文本、说话人分配、时间戳以及同时运行实时会话时的延迟；不应把实时文字作为离线识别输入。
+配置鉴权时添加 `Authorization: Bearer <API_KEY>`。文件转写示例见 [README](../README.md)，实时与并发验收见 [benchmark](../scripts/benchmark/README.md)。
 
-CPU 默认单会话、8 个 Rust 线程和 640ms 解码间隔，可分别通过 `R2T2_MAX_SESSIONS`、`R2T2_CPU_THREADS`、`R2T2_CHUNK_SECONDS` 调整。输入帧仍不得超过 1 秒；解码间隔与输入帧长度独立。CPU 同一时刻只执行一次原生推理，离线片段不可中途抢占；混合负载的实时延迟需单独验收。详见 [CPU PoC](../experiments/r2t2_cpu/README.md)。
+启动器依次加载私有推理引擎与公共 API，任一进程异常则关闭全部子进程。私有引擎只监听容器内 `127.0.0.1:8001`；健康检查等待模型就绪，启动宽限期为 600 秒。
+
+CPU 推理不可中途抢占，同时跑实时与离线会增加延迟。历史 M5 Pro 短样本纯识别 RTF 约 0.08–0.13；Linux amd64 完整 5 分钟录音约耗时 310 秒，不能按 Mac 结果承诺实时性能。Linux arm64 已验证构建和动态库加载，完整模型链路尚未验收。
+
+Nemotron 最多支持 8 个说话人。混合语言可能漏词，重叠发言仍受单路 ASR 限制；时间戳边界合法不代表人工对齐准确。模型质量和长时并发须在目标硬件用真实录音验收。

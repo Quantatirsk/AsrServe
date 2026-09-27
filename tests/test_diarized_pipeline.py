@@ -87,8 +87,21 @@ class DiarizedPipelineTest(unittest.TestCase):
             )
         )
 
-    def split(self, audio_path: str, output_dir: str) -> list[AudioSegment]:
+    def split(
+        self,
+        audio_path: str,
+        output_dir: str,
+        speech_segments: list[tuple[int, int]] | None = None,
+    ) -> list[AudioSegment]:
         self.assertEqual(audio_path, str(self.source))
+        # The splitter reuses diarization's unioned activity whenever it ran, and
+        # only falls back to VAD when diarization was disabled.
+        self.assertEqual(
+            speech_segments,
+            self.diarizer.diarize.return_value.speech_intervals_ms()
+            if self.diarizer.diarize.called
+            else None,
+        )
         chunks = []
         for index, (start, end) in enumerate(((10000, 13000), (13000, 14000))):
             path = Path(output_dir) / f"chunk-{index}.wav"

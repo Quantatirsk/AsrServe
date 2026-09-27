@@ -4,4 +4,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export NEMOTRON_MODEL_PATH="${NEMOTRON_MODEL_PATH:-$PWD/models/nemotron-3-diarization}"
 export HF_HOME="${HF_HOME:-$PWD/models/huggingface}"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models/modelscope/hub}"
-exec uv run python -m app.utils.download_models "$@"
+UV_ARGS=(--frozen)
+if [ "$(uname -s)" = Linux ]; then
+  if [ "${DEVICE:-cuda:0}" = cpu ]; then
+    UV_ARGS+=(--extra cpu)
+  else
+    UV_ARGS+=(--extra cuda)
+  fi
+fi
+exec uv run "${UV_ARGS[@]}" python -m app.utils.download_models "$@"

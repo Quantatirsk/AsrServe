@@ -71,3 +71,5 @@ benchmark_results/
 .venv*/
 model_exports/
 vendor/
+!vendor/qwenasr/
+vendor/qwenasr/target/

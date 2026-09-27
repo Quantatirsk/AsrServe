@@ -244,12 +244,15 @@ class AudioSplitter:
         self,
         audio_path: str,
         output_dir: Optional[str] = None,
+        speech_segments: Optional[List[Tuple[int, int]]] = None,
     ) -> List[AudioSegment]:
         """分割音频文件
 
         Args:
             audio_path: 音频文件路径
             output_dir: 输出目录（可选，默认使用临时目录）
+            speech_segments: 已知语音区间 [(start_ms, end_ms), ...]。给出时直接
+                复用，不再调用 VAD；空列表仍按固定时长分割以保留识别兜底
 
         Returns:
             音频片段列表
@@ -273,8 +276,13 @@ class AudioSplitter:
                     )
                 ]
 
-            # 获取 VAD 段
-            vad_segments = self.get_vad_segments(audio_path)
+            # 开启说话人分离时复用 Nemotron 的活跃区间，省掉一次针对同一份音频的
+            # 全程 VAD 推理；关闭分离时才回退到 FSMN VAD。
+            vad_segments = (
+                speech_segments
+                if speech_segments is not None
+                else self.get_vad_segments(audio_path)
+            )
 
             # 贪婪合并
             merged_segments = self.merge_segments_greedy(vad_segments, total_duration_ms)

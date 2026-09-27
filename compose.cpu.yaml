@@ -1,0 +1,22 @@
+name: r2t2-asr-cpu
+services:
+  asr:
+    image: quantatrisk/qwen3-asr:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    ports:
+      - "${ASR_PORT:-4174}:8000"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DEVICE: cpu
+    volumes:
+      - ./logs:/app/logs
+      - ./models/nemotron-3-diarization:/app/models/nemotron-3-diarization:ro
+      - ./models/modelscope:/root/.cache/modelscope
+      - ./models/huggingface:/root/.cache/huggingface

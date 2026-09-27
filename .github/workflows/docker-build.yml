@@ -1,4 +1,4 @@
-name: Build R2T2 CUDA Image
+name: Build R2T2 Images
 
 on:
   push:
@@ -9,7 +9,20 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - file: Dockerfile.gpu
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - file: Dockerfile.cpu
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - file: Dockerfile.cpu
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     steps:
@@ -21,9 +34,9 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.gpu
-          platforms: linux/amd64
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
           push: false
-          tags: local/r2t2-asr:dev
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: quantatrisk/qwen3-asr:latest
+          cache-from: type=gha,scope=${{ matrix.file }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.file }}-${{ matrix.platform }}
