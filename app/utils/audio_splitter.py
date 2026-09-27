@@ -168,7 +168,7 @@ class AudioSplitter:
         ]
 
     def _split_by_fixed_duration(self, total_duration_ms: int) -> List[Tuple[int, int]]:
-        """按固定时长切分（无 VAD 时的 fallback）
+        """按固定时长切分（无活动区间时保留音频的兜底）
 
         Args:
             total_duration_ms: 音频总时长（毫秒）

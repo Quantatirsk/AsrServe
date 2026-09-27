@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     if integrity["invalid_models"]:
         raise RuntimeError("Required model integrity check failed")
     preload_models()
-    logger.info("Shared R2T2 connection, forced aligner, VAD and speaker models ready")
+    logger.info("Shared R2T2 connection, forced aligner and Nemotron ready")
     try:
         yield
     finally:
