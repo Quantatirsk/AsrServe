@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg libsndfile1 ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s "$(command -v python3)" /opt/ascend-python \
-    && python3 -m pip freeze > /tmp/ascend-constraints.txt \
+    && python3 -m pip freeze --exclude-editable > /tmp/ascend-constraints.txt \
     && python3 -m pip install --no-cache-dir -c /tmp/ascend-constraints.txt \
         python-dotenv loguru librosa soundfile websockets \
     && python3 -m pip check
