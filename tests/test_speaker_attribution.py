@@ -248,6 +248,51 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual(result[0].speaker_id, "A")
         self.assert_preserved(source, result)
 
+    def test_short_unknown_tails_and_prefixes_use_supported_neighbors(self) -> None:
+        source = [
+            turn("Main. ", 0, 5, "A"),
+            turn("Tail. ", 5.3, 5.5, None),
+            turn("Reply. ", 5.5, 9, "B"),
+            turn("Prefix. ", 9.5, 9.8, None),
+            turn("Return.", 10, 15, "A"),
+        ]
+        source[1].speaker_candidates = ["B", "A"]
+        source[3].speaker_candidates = ["A", "C"]
+        result = consolidate_speaker_turns(source)
+        self.assertEqual(
+            [s.text for s in result], ["Main. Tail. ", "Reply. ", "Prefix. Return."]
+        )
+        self.assertEqual([s.speaker_id for s in result], ["A", "B", "A"])
+        self.assert_preserved(source, result)
+        self.assertIsNone(source[1].speaker_id)
+
+    def test_unknown_runs_need_short_duration_and_supported_nearby_neighbor(
+        self,
+    ) -> None:
+        for start, end, candidates in [
+            (5, 7, ["A"]),
+            (6.1, 6.5, ["A"]),
+            (5, 5.5, ["C"]),
+            (5, 5.5, None),
+        ]:
+            with self.subTest(start=start, end=end, candidates=candidates):
+                source = [
+                    turn("Main. ", 0, 5, "A"),
+                    turn("Uncertain.", start, end, None),
+                ]
+                source[1].speaker_candidates = candidates
+                self.assertEqual(consolidate_speaker_turns(source), source)
+
+    def test_consecutive_unknown_fragments_are_bounded_as_one_run(self) -> None:
+        source = [
+            turn("Main. ", 0, 5, "A"),
+            turn("First. ", 5, 6.2, None),
+            turn("Second.", 6.2, 7.4, None),
+        ]
+        for part in source[1:]:
+            part.speaker_candidates = ["A", "B"]
+        self.assertEqual(consolidate_speaker_turns(source), source)
+
     def test_same_speaker_paragraph_spans_natural_pauses_up_to_limit(self) -> None:
         source = [
             turn("First. ", 841, 845, "A"),

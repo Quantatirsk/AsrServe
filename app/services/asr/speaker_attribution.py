@@ -40,16 +40,9 @@ def _join_turns(segments: Sequence[ASRSegmentResult]) -> ASRSegmentResult:
     )
 
 
-def consolidate_speaker_turns(
+def _merge_same_speaker_turns(
     segments: Sequence[ASRSegmentResult],
 ) -> list[ASRSegmentResult]:
-    """Produce main-speaker paragraphs without changing raw diarization evidence.
-
-    Brief interruptions inherit the surrounding main speaker for paragraph
-    presentation only. Every text character and aligned word instant survives.
-    Count interruption spans without pauses between them; short main turns
-    qualify too. Thresholds use the final, sample-rate-scaled recording timeline.
-    """
     turns: list[ASRSegmentResult] = []
     for segment in segments:
         if (
@@ -61,6 +54,21 @@ def consolidate_speaker_turns(
             turns[-1] = _join_turns([turns[-1], segment])
         else:
             turns.append(segment)
+
+    return turns
+
+
+def consolidate_speaker_turns(
+    segments: Sequence[ASRSegmentResult],
+) -> list[ASRSegmentResult]:
+    """Produce main-speaker paragraphs without changing raw diarization evidence.
+
+    Brief interruptions inherit the surrounding main speaker for paragraph
+    presentation only. Every text character and aligned word instant survives.
+    Count interruption spans without pauses between them; short main turns
+    qualify too. Thresholds use the final, sample-rate-scaled recording timeline.
+    """
+    turns = _merge_same_speaker_turns(segments)
 
     output: list[ASRSegmentResult] = []
     index = 0
@@ -90,7 +98,45 @@ def consolidate_speaker_turns(
                 continue
         output.append(turns[index])
         index += 1
-    return output
+    # Resolve short uncertain boundary runs from the original neighbors only.
+    # Prefer the preceding speaker for sentence tails; raw activity stays intact.
+    resolved = list(output)
+    index = 0
+    while index < len(output):
+        if output[index].speaker_id is not None:
+            index += 1
+            continue
+        end = index + 1
+        while end < len(output) and output[end].speaker_id is None:
+            end += 1
+        run = output[index:end]
+        if run[-1].end_time - run[0].start_time < MAX_INTERJECTION_SECONDS:
+            neighbors = []
+            if index:
+                neighbors.append(
+                    (output[index - 1], run[0].start_time - output[index - 1].end_time)
+                )
+            if end < len(output):
+                neighbors.append(
+                    (output[end], output[end].start_time - run[-1].end_time)
+                )
+            for neighbor, gap in neighbors:
+                if gap <= MAX_TURN_GAP_SECONDS and all(
+                    neighbor.speaker_id in (part.speaker_candidates or [])
+                    for part in run
+                ):
+                    resolved[index:end] = [
+                        replace(
+                            part,
+                            speaker_id=neighbor.speaker_id,
+                            speaker_candidates=None,
+                        )
+                        for part in run
+                    ]
+                    break
+        index = end
+
+    return _merge_same_speaker_turns(resolved)
 
 
 def _text_positions(text: str) -> list[int]:
