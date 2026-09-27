@@ -135,7 +135,11 @@ class R2T2OfflineTest(unittest.TestCase):
             patch("app.services.asr.r2t2_engine.transcribe_segment", return_value=raw),
         ):
             result = engine.transcribe_segments(
-                [SimpleNamespace(temp_file=source.name, start_sec=0, end_sec=1)],
+                [
+                    SimpleNamespace(
+                        temp_file=source.name, start_sec=0, end_sec=1, audio_data=None
+                    )
+                ],
                 word_timestamps=True,
             )[0]
             self.assertEqual(result.text, expected)
@@ -160,11 +164,13 @@ class R2T2OfflineTest(unittest.TestCase):
             patch(
                 "app.services.asr.r2t2_engine._load_audio",
                 side_effect=lambda path: second if "second" in path else audio,
-            ),
+            ) as load_audio,
             patch(
                 "app.services.asr.r2t2_engine.transcribe_segment",
                 # Concurrent calls may arrive in any order; results keep segment order.
-                side_effect=lambda samples, _: "second." if samples is second else "fresh!",
+                side_effect=lambda samples, _: "second."
+                if samples is second
+                else "fresh!",
             ) as recognize,
         ):
             paths = [
@@ -174,10 +180,18 @@ class R2T2OfflineTest(unittest.TestCase):
                 Path(path).touch()
             segments = [
                 SimpleNamespace(
-                    temp_file=paths[0], start_sec=5.0, end_sec=8.0, speaker_id=None
+                    temp_file=paths[0],
+                    start_sec=5.0,
+                    end_sec=8.0,
+                    speaker_id=None,
+                    audio_data=audio,
                 ),
                 SimpleNamespace(
-                    temp_file=paths[1], start_sec=9.0, end_sec=11.0, speaker_id=None
+                    temp_file=paths[1],
+                    start_sec=9.0,
+                    end_sec=11.0,
+                    speaker_id=None,
+                    audio_data=None,
                 ),
             ]
             results = engine.transcribe_segments(
@@ -189,6 +203,7 @@ class R2T2OfflineTest(unittest.TestCase):
             self.assertEqual(results[0].word_tokens[0].start_time, 0.2)
             self.assertEqual(results[0].word_tokens[0].text, "fresh")
             self.assertEqual(recognize.call_count, 2)
+            load_audio.assert_called_once_with(paths[1])
             recognize.assert_any_call(audio, "Ada")
             engine.aligner.align_transcript.assert_any_call(
                 audio_path=paths[0], text="fresh!", audio=audio
@@ -212,7 +227,11 @@ class R2T2OfflineTest(unittest.TestCase):
             result = engine.transcribe_segments(
                 [
                     SimpleNamespace(
-                        temp_file=source.name, start_sec=0, end_sec=1, speaker_id=None
+                        temp_file=source.name,
+                        start_sec=0,
+                        end_sec=1,
+                        speaker_id=None,
+                        audio_data=None,
                     )
                 ],
             )

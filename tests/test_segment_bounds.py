@@ -64,10 +64,21 @@ class SegmentBoundsTest(unittest.TestCase):
                 speech_segments=overlapping.speech_intervals_ms(),
             )
         self.assertTrue(all(0 < segment.duration_ms <= 60000 for segment in segments))
-        self.assertEqual(segments[0].start_ms, 1000)
+        self.assertEqual(segments[0].start_ms, 0)
         self.assertEqual(segments[-1].end_ms, 95000)
-        # Only the 70-90 s silence is dropped; no speech interval is truncated.
-        self.assertEqual(sum(segment.duration_ms for segment in segments), 69000 + 5000)
+        # Retain the full timeline, including gaps, so low activity cannot drop words.
+        self.assertEqual(sum(segment.duration_ms for segment in segments), 95000)
+
+    def test_pack_activity_until_budget_and_reuse_pause_boundaries(self) -> None:
+        splitter = AudioSplitter()
+        spans = [(i * 1000, i * 1000 + 500) for i in range(125)]
+        chunks = splitter.merge_segments_greedy(spans, 125000)
+        self.assertEqual(chunks, [(0, 60000), (60000, 120000), (120000, 125000)])
+        self.assertEqual(sum(end - start for start, end in chunks), 125000)
+        self.assertEqual(
+            splitter.merge_segments_greedy([(0, 58000), (59000, 125000)], 125000),
+            [(0, 58500), (58500, 118500), (118500, 125000)],
+        )
 
     def test_empty_activity_retains_silence_and_unrecognized_signal_samples(
         self,

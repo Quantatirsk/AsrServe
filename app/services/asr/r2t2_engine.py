@@ -48,7 +48,12 @@ class R2T2Engine:
         for segment in segments:
             if not segment.temp_file or not Path(segment.temp_file).is_file():
                 raise FileNotFoundError(f"Missing audio segment: {segment.temp_file}")
-        audios = [_load_audio(segment.temp_file) for segment in segments]
+        audios = [
+            segment.audio_data
+            if segment.audio_data is not None
+            else _load_audio(segment.temp_file)
+            for segment in segments
+        ]
         # The engine batches concurrent segments; alignment stays serial.
         pool = ThreadPoolExecutor(OFFLINE_CONCURRENCY)
         try:

@@ -55,142 +55,56 @@ class AudioSplitter:
     使用已有语音活动边界分割长音频，不运行检测模型
     """
 
-    # 默认配置
-    DEFAULT_MIN_SEGMENT_SEC = 1.0  # 每段最小时长（秒）
-    DEFAULT_SAMPLE_RATE = 16000  # 默认采样率
+    DEFAULT_SAMPLE_RATE = 16000
 
-    def __init__(
-        self,
-        min_segment_sec: float = DEFAULT_MIN_SEGMENT_SEC,
-    ):
-        """初始化音频分割器
-
-        Args:
-            min_segment_sec: 每段最小时长（秒）
-        """
-        split_trigger_sec = settings.MAX_SEGMENT_SEC
-
-        self.split_trigger_sec = split_trigger_sec
-        self.min_segment_sec = min_segment_sec
-        self.split_trigger_ms = int(split_trigger_sec * 1000)
-        self.min_segment_ms = int(min_segment_sec * 1000)
-
-    def merge_segments_greedy(
-        self, speech_segments: List[Tuple[int, int]], total_duration_ms: int
-    ) -> List[Tuple[int, int]]:
-        """按语音活动区间重分段
-
-        策略：
-        1. 默认保留 语音活动原始边界，避免将整段连续语音合并成超长片段
-        2. 仅对短片段（< min_segment_ms）做邻段合并
-        3. 对重叠片段进行边界修正，避免重复音频
-
-        Args:
-            speech_segments: 已检测到的语音段列表 [(start_ms, end_ms), ...]
-            total_duration_ms: 音频总时长（毫秒）
-
-        Returns:
-            合并后的段列表 [(start_ms, end_ms), ...]
-        """
-        if not speech_segments:
-            # 未检测到活动不等于静音；保留整个音频交给 ASR（按最大时长切分）
-            return self._split_by_fixed_duration(total_duration_ms)
-
-        # 按时间排序并修正边界（防止越界、重叠）
-        sorted_intervals = sorted(speech_segments, key=lambda x: x[0])
-        normalized: List[Tuple[int, int]] = []
-        for raw_start, raw_end in sorted_intervals:
-            start_ms = max(0, int(raw_start))
-            end_ms = min(total_duration_ms, int(raw_end))
-            if end_ms <= start_ms:
-                continue
-
-            if not normalized:
-                normalized.append((start_ms, end_ms))
-                continue
-
-            last_end = normalized[-1][1]
-            # 有重叠时，优先保持边界，避免与上一段重复采样
-            if start_ms < last_end:
-                start_ms = last_end
-
-            if end_ms > start_ms:
-                normalized.append((start_ms, end_ms))
-
-        if not normalized:
-            return self._split_by_fixed_duration(total_duration_ms)
-
-        merged = list(normalized)
-
-        # 只处理短片段：与相邻片段合并（不基于静音间隙）
-        idx = 0
-        while idx < len(merged):
-            start_ms, end_ms = merged[idx]
-            duration = end_ms - start_ms
-
-            if duration >= self.min_segment_ms or len(merged) == 1:
-                idx += 1
-                continue
-
-            if idx == 0:
-                # 首段过短：并入后段
-                next_end = merged[idx + 1][1]
-                merged[idx + 1] = (start_ms, next_end)
-                del merged[idx]
-                continue
-
-            if idx == len(merged) - 1:
-                # 尾段过短：并入前段
-                prev_start, _ = merged[idx - 1]
-                merged[idx - 1] = (prev_start, end_ms)
-                del merged[idx]
-                idx = max(0, idx - 1)
-                continue
-
-            # 中间短段：优先并入时长更短的一侧，避免单段过长
-            prev_start = merged[idx - 1][0]
-            next_end = merged[idx + 1][1]
-            merged_with_prev_duration = end_ms - prev_start
-            merged_with_next_duration = next_end - start_ms
-
-            if merged_with_prev_duration <= merged_with_next_duration:
-                merged[idx - 1] = (prev_start, end_ms)
-                del merged[idx]
-                idx = max(0, idx - 1)
-            else:
-                merged[idx + 1] = (start_ms, next_end)
-                del merged[idx]
-
-        return [
-            (start_ms + start, start_ms + end)
-            for start_ms, end_ms in merged
-            for start, end in self._split_by_fixed_duration(end_ms - start_ms)
-        ]
-
-    def _split_by_fixed_duration(self, total_duration_ms: int) -> List[Tuple[int, int]]:
-        """按固定时长切分（无活动区间时保留音频的兜底）
-
-        Args:
-            total_duration_ms: 音频总时长（毫秒）
-
-        Returns:
-            切分后的段列表
-        """
+    def __init__(self):
+        self.split_trigger_ms = int(settings.MAX_SEGMENT_SEC * 1000)
         if self.split_trigger_ms < 1:
             raise ValueError(
                 "Maximum segment duration must be at least one millisecond"
             )
-        segments = []
-        current = 0
-        min_tail_ms = min(self.min_segment_ms, self.split_trigger_ms)
+
+    def merge_segments_greedy(
+        self, speech_segments: List[Tuple[int, int]], total_duration_ms: int
+    ) -> List[Tuple[int, int]]:
+        """Pack the entire timeline into bounded chunks, preferring known pauses.
+
+        Activity is a cut hint, never permission to discard unrecognized audio.
+        These computation boundaries do not define transcript paragraphs.
+        """
+        spans = []
+        for start, end in sorted(speech_segments):
+            start, end = max(0, int(start)), min(total_duration_ms, int(end))
+            if end <= start:
+                continue
+            if spans and start <= spans[-1][1]:
+                spans[-1] = (spans[-1][0], max(end, spans[-1][1]))
+            else:
+                spans.append((start, end))
+        pauses = [(left[1], right[0]) for left, right in zip(spans, spans[1:])]
+        chunks = []
+        current = pause_index = 0
         while current < total_duration_ms:
-            end = min(current + self.split_trigger_ms, total_duration_ms)
-            remaining = total_duration_ms - end
-            if 0 < remaining < min_tail_ms:
-                end = total_duration_ms - min_tail_ms
-            segments.append((current, end))
-            current = end
-        return segments
+            limit = min(current + self.split_trigger_ms, total_duration_ms)
+            cut = limit
+            if limit < total_duration_ms:
+                candidate = None
+                while pause_index < len(pauses) and pauses[pause_index][0] <= limit:
+                    start, end = pauses[pause_index]
+                    point = limit if end >= limit else (start + end) // 2
+                    if point > current:
+                        candidate = point
+                    if end > limit:
+                        break
+                    pause_index += 1
+                if candidate is not None:
+                    cut = candidate
+            chunks.append((current, cut))
+            current = cut
+        return chunks
+
+    def _split_by_fixed_duration(self, total_duration_ms: int) -> List[Tuple[int, int]]:
+        return self.merge_segments_greedy([], total_duration_ms)
 
     def split_audio_file(
         self,

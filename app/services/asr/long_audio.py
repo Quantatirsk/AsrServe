@@ -49,39 +49,34 @@ class PreparedLongAudio:
     ) -> ASRFullResult:
         from .speaker_attribution import assign_speakers, consolidate_speaker_turns
 
-        output = []
-        for segment, result in zip(self.segments, results, strict=True):
-            if not result.text:
-                continue
-            absolute = replace(
-                result, start_time=segment.start_sec, end_time=segment.end_sec
-            )
-            groups = (
-                assign_speakers(absolute, self.diarization)
-                if self.diarization is not None
-                else [absolute]
-            )
-            for group in groups:
-                words = (
-                    [
-                        replace(
-                            word,
-                            start_time=word.start_time * timestamp_scale,
-                            end_time=word.end_time * timestamp_scale,
-                        )
-                        for word in group.word_tokens
-                    ]
-                    if group.word_tokens
-                    else None
-                )
-                output.append(
+        absolute = [
+            replace(result, start_time=segment.start_sec, end_time=segment.end_sec)
+            for segment, result in zip(self.segments, results, strict=True)
+            if result.text
+        ]
+        groups = (
+            assign_speakers(absolute, self.diarization)
+            if self.diarization is not None
+            else absolute
+        )
+        output = [
+            replace(
+                group,
+                start_time=group.start_time * timestamp_scale,
+                end_time=group.end_time * timestamp_scale,
+                word_tokens=[
                     replace(
-                        group,
-                        start_time=group.start_time * timestamp_scale,
-                        end_time=group.end_time * timestamp_scale,
-                        word_tokens=words,
+                        word,
+                        start_time=word.start_time * timestamp_scale,
+                        end_time=word.end_time * timestamp_scale,
                     )
-                )
+                    for word in group.word_tokens
+                ]
+                if group.word_tokens
+                else None,
+            )
+            for group in groups
+        ]
         speaker_segments = None
         if self.diarization is not None:
             output = consolidate_speaker_turns(output)

@@ -40,8 +40,8 @@ class DiarizationResult:
     def speech_intervals_ms(self) -> list[tuple[int, int]]:
         """Union speaker activity into speech intervals for offline segmentation.
 
-        Nemotron's official extraction already smooths frame-level noise, so the
-        offline splitter reuses these intervals in both label modes. Gaps are
+        Extraction thresholds frame probabilities; the offline splitter reuses
+        these intervals as cut hints in both label modes. Gaps are
         regions with no detected speaker activity, not proof of acoustic silence.
         """
         merged: list[list[int]] = []

@@ -12,7 +12,7 @@ from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from app.core.config import settings
+from app.core.config import OFFLINE_MAX_SECONDS, settings
 
 from .engine import Model
 from .protocol import (
@@ -112,7 +112,7 @@ def create_app(model_factory=Model, *, max_sessions=None):
             "word_timestamps": False,
             "speaker_diarization": False,
             "offline_transcription": True,
-            "offline_max_seconds": 60,
+            "offline_max_seconds": OFFLINE_MAX_SECONDS,
         }
 
     @app.get("/health")
@@ -147,7 +147,9 @@ def create_app(model_factory=Model, *, max_sessions=None):
                 async for chunk in request.stream():
                     if len(data) + len(chunk) > OFFLINE_MAX_BYTES:
                         raise StreamError(
-                            "invalid_audio", "Offline segment exceeds 60 seconds", 413
+                            "invalid_audio",
+                            f"Offline segment exceeds {OFFLINE_MAX_SECONDS} seconds",
+                            413,
                         )
                     data.extend(chunk)
                 if not data or len(data) % 4:

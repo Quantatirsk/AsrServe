@@ -11,6 +11,10 @@ from app.services.asr.speaker_attribution import (
 from app.utils.speaker_diarizer import DiarizationResult, SpeakerSegment
 
 
+def assign_one(result, activity):
+    return assign_speakers([result], activity)
+
+
 def diarization(
     spans: list[tuple[float, float, str]], duration: float = 5.0
 ) -> DiarizationResult:
@@ -87,7 +91,7 @@ class SpeakerAttributionTest(unittest.TestCase):
         original = transcript(
             text, [(i * 0.3, i * 0.3 + 0.2) for i in range(len(units))]
         )
-        output = assign_speakers(original, diarization([(0, 5, "speaker-1")]))
+        output = assign_one(original, diarization([(0, 5, "speaker-1")]))
         self.assert_preserved(original, output)
         self.assertEqual(len(output), 1)
         self.assertEqual(output[0].speaker_id, "speaker-1")
@@ -96,7 +100,7 @@ class SpeakerAttributionTest(unittest.TestCase):
         original = transcript(
             "Start. Yes! Continue.", [(0, 0.8), (1, 1.1), (1.2, 2)], 10, 13
         )
-        output = assign_speakers(
+        output = assign_one(
             original,
             diarization(
                 [
@@ -118,63 +122,99 @@ class SpeakerAttributionTest(unittest.TestCase):
         self.assertAlmostEqual(output[1].word_tokens[0].start_time, 0)
         self.assertAlmostEqual(output[1].word_tokens[0].end_time, 0.1)
 
-    def test_overlap_is_not_duplicated_or_assigned_by_probability(self) -> None:
+    def test_overlap_uses_stable_labels_without_duplicate_text(self) -> None:
         original = transcript("Mixed voices.", [(0, 1), (1, 2)])
-        speakers = diarization([(0, 2, "speaker-1"), (0, 2, "speaker-2")])
-        speakers.probabilities[:, 0] = 0.99
-        speakers.probabilities[:, 1] = 0.55
-        speakers.probabilities[100:, 0] = 0.55
-        speakers.probabilities[100:, 1] = 0.99
-        output = assign_speakers(original, speakers)
+        activity = diarization([(0, 2, "speaker-1"), (0, 2, "speaker-2")])
+        output = assign_one(original, activity)
         self.assert_preserved(original, output)
         self.assertEqual(len(output), 1)
-        self.assertIsNone(output[0].speaker_id)
-        self.assertEqual(output[0].speaker_candidates, ["speaker-1", "speaker-2"])
+        self.assertEqual(output[0].speaker_id, "speaker-1")
+        self.assertIsNone(output[0].speaker_candidates)
 
-    def test_switch_inside_word_is_uncertain(self) -> None:
+    def test_switch_inside_word_uses_greatest_coverage(self) -> None:
         original = transcript("Across.", [(0, 1)])
-        output = assign_speakers(
+        output = assign_one(
             original, diarization([(0, 0.6, "speaker-1"), (0.6, 1, "speaker-2")])
         )
-        self.assertIsNone(output[0].speaker_id)
-        self.assertEqual(output[0].speaker_candidates, ["speaker-1", "speaker-2"])
-
-    def test_silence_and_insufficient_coverage_are_unknown(self) -> None:
-        original = transcript("One. Two.", [(0, 1), (2, 3)])
-        output = assign_speakers(original, diarization([(0, 0.3, "speaker-1")]))
+        self.assertEqual(output[0].speaker_id, "speaker-1")
         self.assert_preserved(original, output)
-        self.assertTrue(all(segment.speaker_id is None for segment in output))
-        self.assertEqual(output[0].speaker_candidates, ["speaker-1"])
-        self.assertIsNone(output[1].speaker_candidates)
+
+    def test_missing_activity_keeps_previous_speaker(self) -> None:
+        original = transcript("One. Two.", [(0, 1), (2, 3)])
+        output = assign_one(original, diarization([(0, 0.3, "speaker-2")]))
+        self.assert_preserved(original, output)
+        self.assertEqual(len(output), 1)
+        self.assertEqual(output[0].speaker_id, "speaker-2")
 
     def test_no_diarization_retains_transcript(self) -> None:
         original = transcript("Still here!", [(0, 1), (1, 2)])
-        output = assign_speakers(original, diarization([]))
+        output = assign_one(original, diarization([]))
         self.assert_preserved(original, output)
-        self.assertIsNone(output[0].speaker_id)
+        self.assertEqual(output[0].speaker_id, "说话人1")
 
     def test_empty_and_unaligned_text(self) -> None:
-        self.assertEqual(
-            assign_speakers(ASRSegmentResult("", 0, 1), diarization([])), []
-        )
+        self.assertEqual(assign_one(ASRSegmentResult("", 0, 1), diarization([])), [])
         for text in ("! \n", "No alignment."):
             original = ASRSegmentResult(text, 0, 1)
-            output = assign_speakers(original, diarization([(0, 1, "speaker-1")]))
+            output = assign_one(original, diarization([(0, 1, "speaker-1")]))
             self.assertEqual(output[0].text, text)
-            self.assertIsNone(output[0].speaker_id)
+            self.assertEqual(output[0].speaker_id, "speaker-1")
 
-    def test_alignment_mismatch_retains_all_text_and_tokens_as_unknown(self) -> None:
+    def test_alignment_mismatch_keeps_text_and_assigns_whole_block(self) -> None:
         original = transcript("Keep every word.", [(0, 1), (1, 2), (2, 3)])
         original.word_tokens[1].text = "different"
-        output = assign_speakers(original, diarization([(0, 5, "speaker-1")]))
+        output = assign_one(original, diarization([(0, 5, "speaker-1")]))
         self.assert_preserved(original, output)
-        self.assertIsNone(output[0].speaker_id)
+        self.assertEqual(output[0].speaker_id, "speaker-1")
+
+    def test_tail_and_uncertainty_across_compute_chunks_do_not_split_paragraph(
+        self,
+    ) -> None:
+        source = [
+            transcript("定价", [(0, 1), (1, 60)], end=60),
+            transcript("权，继续", [(0, 0.5), (0.5, 1), (1, 35)], start=60, end=95),
+        ]
+        activity = diarization([(0, 59.9, "speaker-2"), (61, 95, "speaker-2")], 95)
+        output = consolidate_speaker_turns(assign_speakers(source, activity))
+        self.assertEqual(len(output), 1)
+        self.assertEqual(output[0].text, "定价权，继续")
+        self.assertEqual(output[0].speaker_id, "speaker-2")
+        self.assertEqual(output[0].end_time, 95)
+        before = [
+            (w.text, r.start_time + w.start_time, r.start_time + w.end_time)
+            for r in source
+            for w in r.word_tokens
+        ]
+        after = [
+            (w.text, r.start_time + w.start_time, r.start_time + w.end_time)
+            for r in output
+            for w in r.word_tokens
+        ]
+        self.assertEqual(before, after)
+        self.assertEqual(len(activity.segments), 2)
+
+    def test_ambiguous_chunk_opening_carries_recording_speaker(self) -> None:
+        source = [
+            transcript("前", [(0, 1)], end=60),
+            transcript("尾新", [(0, 1), (30, 31)], start=60, end=95),
+        ]
+        activity = diarization([(0, 1, "A"), (90, 95, "B")], 95)
+        result = consolidate_speaker_turns(assign_speakers(source, activity))
+        self.assertEqual(
+            [(r.text, r.speaker_id) for r in result], [("前尾", "A"), ("新", "B")]
+        )
+
+    def test_uncovered_opening_uses_nearest_speaker(self) -> None:
+        original = transcript("开始", [(0, 0.5), (0.5, 1)])
+        output = assign_one(original, diarization([(2, 4, "speaker-2")]))
+        self.assertEqual(output[0].speaker_id, "speaker-2")
+        self.assert_preserved(original, output)
 
     def test_zero_duration_word_at_boundary_and_recording_end(self) -> None:
         original = transcript(
             "Before. After. End.", [(0.5, 0.5), (1, 1), (2, 2)], end=2
         )
-        output = assign_speakers(
+        output = assign_one(
             original, diarization([(0, 1, "speaker-1"), (1, 2, "speaker-2")], 2)
         )
         self.assert_preserved(original, output)
@@ -188,15 +228,13 @@ class SpeakerAttributionTest(unittest.TestCase):
         )
         early = transcript("Early.", [(0, 1)], end=1)
         late = transcript("Returned.", [(0, 1)], start=90, end=91)
-        self.assertEqual(assign_speakers(early, speakers)[0].speaker_id, "speaker-1")
-        self.assertEqual(assign_speakers(late, speakers)[0].speaker_id, "speaker-1")
+        self.assertEqual(assign_one(early, speakers)[0].speaker_id, "speaker-1")
+        self.assertEqual(assign_one(late, speakers)[0].speaker_id, "speaker-1")
 
     def test_invalid_timestamps_raise(self) -> None:
         for lower, upper in ((0, 6), (-1, 1), (2, 1), (float("nan"), 1)):
             with self.subTest(lower=lower, upper=upper), self.assertRaises(ValueError):
-                assign_speakers(
-                    transcript("Invalid.", [(lower, upper)]), diarization([])
-                )
+                assign_one(transcript("Invalid.", [(lower, upper)]), diarization([]))
 
 
 def turn(text: str, start: float, end: float, speaker: str | None) -> ASRSegmentResult:
@@ -248,52 +286,7 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual(result[0].speaker_id, "A")
         self.assert_preserved(source, result)
 
-    def test_short_unknown_tails_and_prefixes_use_supported_neighbors(self) -> None:
-        source = [
-            turn("Main. ", 0, 5, "A"),
-            turn("Tail. ", 5.3, 5.5, None),
-            turn("Reply. ", 5.5, 9, "B"),
-            turn("Prefix. ", 9.5, 9.8, None),
-            turn("Return.", 10, 15, "A"),
-        ]
-        source[1].speaker_candidates = ["B", "A"]
-        source[3].speaker_candidates = ["A", "C"]
-        result = consolidate_speaker_turns(source)
-        self.assertEqual(
-            [s.text for s in result], ["Main. Tail. ", "Reply. ", "Prefix. Return."]
-        )
-        self.assertEqual([s.speaker_id for s in result], ["A", "B", "A"])
-        self.assert_preserved(source, result)
-        self.assertIsNone(source[1].speaker_id)
-
-    def test_unknown_runs_need_short_duration_and_supported_nearby_neighbor(
-        self,
-    ) -> None:
-        for start, end, candidates in [
-            (5, 7, ["A"]),
-            (6.1, 6.5, ["A"]),
-            (5, 5.5, ["C"]),
-            (5, 5.5, None),
-        ]:
-            with self.subTest(start=start, end=end, candidates=candidates):
-                source = [
-                    turn("Main. ", 0, 5, "A"),
-                    turn("Uncertain.", start, end, None),
-                ]
-                source[1].speaker_candidates = candidates
-                self.assertEqual(consolidate_speaker_turns(source), source)
-
-    def test_consecutive_unknown_fragments_are_bounded_as_one_run(self) -> None:
-        source = [
-            turn("Main. ", 0, 5, "A"),
-            turn("First. ", 5, 6.2, None),
-            turn("Second.", 6.2, 7.4, None),
-        ]
-        for part in source[1:]:
-            part.speaker_candidates = ["A", "B"]
-        self.assertEqual(consolidate_speaker_turns(source), source)
-
-    def test_same_speaker_paragraph_spans_natural_pauses_up_to_limit(self) -> None:
+    def test_same_speaker_paragraph_has_no_duration_limit(self) -> None:
         source = [
             turn("First. ", 841, 845, "A"),
             turn("And. ", 846.2, 846.5, "A"),
@@ -302,9 +295,8 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
             turn("New paragraph.", 870, 872, "A"),
         ]
         result = consolidate_speaker_turns(source)
-        self.assertEqual(len(result), 2)
-        self.assertEqual((result[0].start_time, result[0].end_time), (841, 855))
-        self.assertEqual(result[1].text, "New paragraph.")
+        self.assertEqual(len(result), 1)
+        self.assertEqual((result[0].start_time, result[0].end_time), (841, 872))
         self.assert_preserved(source, result)
 
     def test_adjacent_main_speaker_groups_merge_and_rebase_words(self) -> None:
@@ -362,7 +354,7 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self,
     ) -> None:
         plain = [turn("First. ", 0, 20, "A"), turn("Next.", 20, 40, "A")]
-        self.assertEqual(len(consolidate_speaker_turns(plain)), 2)
+        self.assertEqual(len(consolidate_speaker_turns(plain)), 1)
         source = [
             turn("Long. ", 0, 39, "A"),
             turn("Brief. ", 39, 39.5, "B"),

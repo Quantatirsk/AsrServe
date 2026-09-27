@@ -11,6 +11,9 @@ from typing import Optional
 from pathlib import Path
 
 
+OFFLINE_MAX_SECONDS = 60
+
+
 class Settings:
     """统一应用配置类"""
 
@@ -47,7 +50,7 @@ class Settings:
     MAX_AUDIO_SIZE: int = 2048 * 1024 * 1024  # 2GB
 
     # 音频分段配置
-    MAX_SEGMENT_SEC: float = 60.0  # Max offline ASR segment duration in seconds.
+    MAX_SEGMENT_SEC: float = float(OFFLINE_MAX_SECONDS)
 
     def __init__(self) -> None:
         """从环境变量读取配置"""
@@ -97,9 +100,11 @@ class Settings:
         )
         if (
             not math.isfinite(self.MAX_SEGMENT_SEC)
-            or not 0 < self.MAX_SEGMENT_SEC <= 60
+            or not 0 < self.MAX_SEGMENT_SEC <= OFFLINE_MAX_SECONDS
         ):
-            raise ValueError("MAX_SEGMENT_SEC must be greater than zero and at most 60")
+            raise ValueError(
+                f"MAX_SEGMENT_SEC must be greater than zero and at most {OFFLINE_MAX_SECONDS}"
+            )
 
     def _parse_size(self, size_str: str) -> int:
         """解析带单位的大小字符串

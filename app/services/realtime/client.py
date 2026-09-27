@@ -11,7 +11,7 @@ import numpy as np
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from app.core.config import settings
+from app.core.config import OFFLINE_MAX_SECONDS, settings
 
 from .protocol import (
     MODEL_ID,
@@ -87,7 +87,9 @@ def transcribe_segment(audio: np.ndarray, context: str = "") -> str:
         or not 0 < len(audio) <= OFFLINE_MAX_SAMPLES
         or not np.isfinite(audio).all()
     ):
-        raise ValueError("Expected 1 sample to 60 seconds of finite mono 16 kHz audio")
+        raise ValueError(
+            f"Expected 1 sample to {OFFLINE_MAX_SECONDS} seconds of finite mono 16 kHz audio"
+        )
     if len(context) > 2048:
         raise ValueError("Transcription context exceeds 2048 characters")
     request = Request(

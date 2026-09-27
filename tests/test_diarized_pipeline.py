@@ -174,18 +174,16 @@ class DiarizedPipelineTest(unittest.TestCase):
         self.assertEqual(result.text, "First. Yes! Mixed.\nAfter.")
         self.assertEqual(
             [segment.text for segment in result.segments],
-            ["First. ", "Yes! ", "Mixed.", "After."],
+            ["First. ", "Yes! Mixed.", "After."],
         )
         self.assertEqual(
             [segment.speaker_id for segment in result.segments],
-            ["speaker-1", "speaker-2", None, "speaker-1"],
+            ["speaker-1", "speaker-2", "speaker-1"],
         )
-        self.assertEqual(
-            result.segments[2].speaker_candidates, ["speaker-1", "speaker-2"]
-        )
+        self.assertTrue(all(s.speaker_candidates is None for s in result.segments))
         np.testing.assert_allclose(
             [(segment.start_time, segment.end_time) for segment in result.segments],
-            [(20, 21.4), (22, 22.2), (24, 26), (26, 28)],
+            [(20, 21.4), (22, 26), (26, 28)],
         )
         self.assertEqual(result.duration, 28)
         self.assertEqual(
@@ -245,7 +243,9 @@ class DiarizedPipelineTest(unittest.TestCase):
         result = self.transcribe(word_timestamps=True)
         self.assertEqual(self.recognize.call_count, 2)
         self.assertEqual(result.text, "First. Yes! Mixed.\nAfter.")
-        self.assertTrue(all(segment.speaker_id is None for segment in result.segments))
+        self.assertTrue(
+            all(segment.speaker_id == "说话人1" for segment in result.segments)
+        )
         self.assertEqual(result.speaker_segments, [])
         self.assert_cleaned()
 
