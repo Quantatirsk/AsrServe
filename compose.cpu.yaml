@@ -18,5 +18,4 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./models/nemotron-3-diarization:/app/models/nemotron-3-diarization:ro
-      - ./models/modelscope:/root/.cache/modelscope
       - ./models/huggingface:/root/.cache/huggingface

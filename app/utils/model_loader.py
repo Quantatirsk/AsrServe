@@ -120,25 +120,6 @@ def _check_model_integrity_spec(spec: ModelIntegritySpec) -> dict[str, Any]:
     }
 
 
-def _build_modelscope_spec(
-    model_id: str,
-    description: str,
-    required_patterns: tuple[str, ...],
-    *,
-    min_total_size_bytes: int,
-    alternative_required_patterns: tuple[tuple[str, ...], ...] = (),
-) -> ModelIntegritySpec:
-    from ..core.config import settings
-
-    return ModelIntegritySpec(
-        description=description,
-        path=Path(settings.MODELSCOPE_PATH) / model_id,
-        required_patterns=required_patterns,
-        alternative_required_patterns=alternative_required_patterns,
-        min_total_size_bytes=min_total_size_bytes,
-    )
-
-
 def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
     from app.infrastructure import (
         get_huggingface_model_cache_dir,
@@ -146,19 +127,9 @@ def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
     )
     from app.services.asr.model_capabilities import (
         get_huggingface_assets,
-        get_runtime_required_modelscope_assets,
     )
 
-    specs = [
-        _build_modelscope_spec(
-            asset.model_id,
-            asset.description,
-            asset.required_patterns,
-            alternative_required_patterns=asset.alternative_required_patterns,
-            min_total_size_bytes=asset.min_total_size_bytes,
-        )
-        for asset in get_runtime_required_modelscope_assets()
-    ]
+    specs = []
     for asset in get_huggingface_assets():
         cache = get_huggingface_model_cache_dir(asset.model_id)
         snapshot = (
@@ -200,25 +171,16 @@ def verify_required_models_integrity(use_logger: bool = True) -> dict[str, Any]:
 
 def preload_models() -> dict[str, Any]:
     """Load every required component; startup must not silently degrade."""
-    from app.core.config import settings
-    from app.core.device import detect_device
-    from app.services.asr.engines import get_global_vad_model
     from app.services.asr.runtime import get_runtime_router
-    from app.services.asr.punctuation import get_punctuation_model
     from app.services.realtime.protocol import MODEL_ID
     from app.services.realtime.client import get_engine_capabilities
     from app.utils.speaker_diarizer import get_speaker_diarizer
 
     if not get_engine_capabilities().get("ready"):
         raise RuntimeError("Shared R2T2 engine is not ready")
-    device = detect_device(settings.DEVICE)
     get_runtime_router().warmup_model(MODEL_ID)
-    get_global_vad_model(device)
     get_speaker_diarizer().warmup()
-    get_punctuation_model()
     return {
         "asr_models": {MODEL_ID: {"loaded": True}},
-        "vad_model": {"loaded": True},
         "speaker_diarization_model": {"loaded": True},
-        "punctuation_model": {"loaded": True},
     }

@@ -14,7 +14,7 @@ from app.utils.speaker_diarizer import DiarizationResult, SpeakerSegment
 
 
 class SegmentBoundsTest(unittest.TestCase):
-    def test_long_vad_and_fixed_duration_preserve_all_intervals(self) -> None:
+    def test_long_activity_and_fixed_duration_preserve_all_intervals(self) -> None:
         with patch.object(settings, "MAX_SEGMENT_SEC", 60):
             splitter = AudioSplitter()
         for duration in (500, 60500, 120500, 125000):
@@ -56,11 +56,6 @@ class SegmentBoundsTest(unittest.TestCase):
                 "app.utils.audio_splitter.librosa",
                 SimpleNamespace(load=Mock(return_value=(audio, 16000))),
             ),
-            patch.object(
-                AudioSplitter,
-                "get_vad_segments",
-                side_effect=AssertionError("VAD must not run when diarization ran"),
-            ),
             patch("app.utils.audio_splitter.sf.write"),
         ):
             segments = AudioSplitter().split_audio_file(
@@ -72,9 +67,36 @@ class SegmentBoundsTest(unittest.TestCase):
         self.assertEqual(segments[0].start_ms, 1000)
         self.assertEqual(segments[-1].end_ms, 95000)
         # Only the 70-90 s silence is dropped; no speech interval is truncated.
-        self.assertEqual(
-            sum(segment.duration_ms for segment in segments), 69000 + 5000
-        )
+        self.assertEqual(sum(segment.duration_ms for segment in segments), 69000 + 5000)
+
+    def test_empty_activity_retains_silence_and_unrecognized_signal_samples(
+        self,
+    ) -> None:
+        size = 125 * 16000
+        signals = {
+            "silence": np.zeros(size, dtype=np.float32),
+            "quiet_noise": np.random.default_rng(7)
+            .normal(0, 0.0001, size)
+            .astype(np.float32),
+        }
+        for name, audio in signals.items():
+            with (
+                self.subTest(signal=name),
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(settings, "MAX_SEGMENT_SEC", 60),
+                patch(
+                    "app.utils.audio_splitter.librosa",
+                    SimpleNamespace(load=Mock(return_value=(audio, 16000))),
+                ),
+                patch("app.utils.audio_splitter.sf.write"),
+            ):
+                segments = AudioSplitter().split_audio_file(
+                    "original.wav", directory, speech_segments=[]
+                )
+                self.assertTrue(all(s.duration_ms <= 60000 for s in segments))
+                np.testing.assert_array_equal(
+                    np.concatenate([s.audio_data for s in segments]), audio
+                )
 
     def test_one_sample_past_limit_is_split_and_retained(self) -> None:
         audio = np.zeros(60 * 16000 + 1, dtype=np.float32)
@@ -85,10 +107,11 @@ class SegmentBoundsTest(unittest.TestCase):
                 "app.utils.audio_splitter.librosa",
                 SimpleNamespace(load=Mock(return_value=(audio, 16000))),
             ),
-            patch.object(AudioSplitter, "get_vad_segments", return_value=[]),
             patch("app.utils.audio_splitter.sf.write"),
         ):
-            segments = AudioSplitter().split_audio_file("original.wav", directory)
+            segments = AudioSplitter().split_audio_file(
+                "original.wav", directory, speech_segments=[]
+            )
             self.assertGreater(len(segments), 1)
             self.assertTrue(
                 all(len(item.audio_data) <= 60 * 16000 for item in segments)

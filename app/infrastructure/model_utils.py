@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
 """Shared model path resolution helpers."""
 
-import logging
 import os
 from pathlib import Path
 from typing import Optional
-
-from app.core.config import settings
-
-logger = logging.getLogger(__name__)
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -80,18 +75,3 @@ def resolve_huggingface_snapshot_dir(model_ref_or_path: str) -> Path:
         f"Hugging Face model path not found for '{model_ref_or_path}'. "
         f"Checked direct path and cache root: {get_huggingface_cache_root()}."
     )
-
-
-def resolve_model_path(model_id: Optional[str]) -> str:
-    if not model_id:
-        raise ValueError("model_id is required")
-
-    local_path = Path(settings.MODELSCOPE_PATH) / model_id
-
-    if local_path.exists() and local_path.is_dir():
-        resolved = str(local_path)
-        logger.info("Using local ModelScope cache for %s: %s", model_id, resolved)
-        return resolved
-
-    logger.warning("ModelScope cache missing for %s; runtime may download it", model_id)
-    return model_id

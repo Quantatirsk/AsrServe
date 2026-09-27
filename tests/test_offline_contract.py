@@ -5,9 +5,7 @@ from app.core.device import detect_device
 from app.core.exceptions import InvalidParameterException
 from app.services.asr.manager import get_model_manager
 from app.services.asr.model_capabilities import (
-    get_download_modelscope_assets,
     get_huggingface_assets,
-    get_runtime_required_modelscope_assets,
 )
 from app.services.asr.model_plan import get_runtime_model_ids
 from app.services.realtime.protocol import MODEL_ID, MODEL_REPOSITORY, MODEL_REVISION
@@ -33,18 +31,6 @@ class OfflineContractTest(unittest.TestCase):
         self.assertEqual(models[0]["offline_model"], models[0]["realtime_model"])
         with self.assertRaises(InvalidParameterException):
             get_model_manager().get_declared_entry_config("unsupported-model")
-
-    def test_modelscope_only_supplies_vad_and_punctuation(self) -> None:
-        expected = {
-            "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-            "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-        }
-        self.assertEqual(
-            {a.model_id for a in get_download_modelscope_assets()}, expected
-        )
-        self.assertEqual(
-            {a.model_id for a in get_runtime_required_modelscope_assets()}, expected
-        )
 
     def test_explicit_cpu_and_cuda_without_fallback(self) -> None:
         with patch("app.core.device.torch.cuda.is_available", return_value=False):

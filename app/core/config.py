@@ -34,27 +34,13 @@ class Settings:
     # 路径配置
     BASE_DIR: Path = Path(__file__).parent.parent.parent
     TEMP_DIR: str = "temp"
-    # ModelScope 默认缓存结构: ~/.cache/modelscope/hub/models/{model_id}
-    MODELSCOPE_PATH: str = str(
-        Path(os.getenv("MODELSCOPE_CACHE", "~/.cache/modelscope/hub")).expanduser()
-        / "models"
-    )
-
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FILE: Optional[str] = str(BASE_DIR / "logs" / "qwen3-asr.log")
     LOG_MAX_BYTES: int = 20 * 1024 * 1024  # 20MB
     LOG_BACKUP_COUNT: int = 50  # 保留50个备份文件
 
-    FUNASR_AUTOMODEL_KWARGS = {
-        "trust_remote_code": False,
-        "disable_update": True,
-        "disable_pbar": True,
-        "disable_log": True,  # 禁用FunASR的tables输出
-        "local_files_only": True,  # 强制使用本地模型，禁止联网下载
-    }
     NEMOTRON_MODEL_PATH: str = str(BASE_DIR / "models/nemotron-3-diarization")
-    VAD_MODEL: str = "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch"
     R2T2_URL: str = ""
     R2T2_INTERNAL_TOKEN: str = ""
     # 音频处理配置

@@ -27,7 +27,6 @@ class OfflineASRRequest:
     model_id: str
     audio_path: str
     hotwords: str = ""
-    enable_punctuation: bool = True
     sample_rate: int = 16000
     enable_speaker_diarization: bool = True
     word_timestamps: bool = False
@@ -107,7 +106,6 @@ class PreparedLongAudio:
 @contextmanager
 def prepare_long_audio(
     audio_path: str,
-    device: str,
     enable_speaker_diarization: bool,
     model_id: str,
     task_id: str | None = None,
@@ -124,25 +122,22 @@ def prepare_long_audio(
         with tempfile.TemporaryDirectory(
             prefix="asr-segments-", dir=settings.TEMP_DIR
         ) as directory:
-            diarization = None
-            if enable_speaker_diarization:
-                from app.utils.speaker_diarizer import get_speaker_diarizer
+            from app.utils.speaker_diarizer import get_speaker_diarizer
 
-                diarization = get_speaker_diarizer().diarize(audio_path)
-            # Recognition never duplicates overlapping speaker intervals. When
-            # diarization ran, its activity intervals already describe speech, so
-            # the splitter reuses them instead of running FSMN VAD over the same
-            # recording; VAD remains the fallback when diarization is disabled.
-            segments = AudioSplitter(device=device).split_audio_file(
+            # Detection is shared by both modes; the flag only controls labels.
+            activity = get_speaker_diarizer().diarize(audio_path)
+            if not activity.segments:
+                logger.info(
+                    "Nemotron detected no activity; retaining audio for ASR fallback"
+                )
+            segments = AudioSplitter().split_audio_file(
                 audio_path,
                 output_dir=directory,
-                speech_segments=(
-                    diarization.speech_intervals_ms()
-                    if diarization is not None
-                    else None
-                ),
+                speech_segments=activity.speech_intervals_ms(),
             )
-            yield PreparedLongAudio(segments, duration, diarization)
+            yield PreparedLongAudio(
+                segments, duration, activity if enable_speaker_diarization else None
+            )
             status = "success"
     finally:
         log_inference_metrics(

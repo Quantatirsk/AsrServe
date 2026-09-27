@@ -147,9 +147,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
             source = Path(directory) / "source.wav"
             source.touch()
             task = asyncio.create_task(
-                router.run_offline(
-                    OfflineASRRequest("model", str(source), enable_punctuation=False)
-                )
+                router.run_offline(OfflineASRRequest("model", str(source)))
             )
             try:
                 await asyncio.wait_for(entered.wait(), 1)
@@ -175,12 +173,13 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(settings, "TEMP_DIR", directory),
             patch("app.services.asr.long_audio.get_audio_duration", return_value=2.0),
+            patch("app.utils.speaker_diarizer.get_speaker_diarizer"),
             patch(
                 "app.utils.audio_splitter.AudioSplitter.split_audio_file",
                 return_value=[segment],
             ),
         ):
-            with prepare_long_audio(str(source), "cuda:0", False, "model") as audio:
+            with prepare_long_audio(str(source), False, "model") as audio:
                 result = audio.finish(
                     [
                         ASRSegmentResult(
@@ -211,13 +210,14 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(settings, "TEMP_DIR", directory),
             patch("app.services.asr.long_audio.get_audio_duration", return_value=1.0),
+            patch("app.utils.speaker_diarizer.get_speaker_diarizer"),
             patch(
                 "app.utils.audio_splitter.AudioSplitter.split_audio_file",
                 side_effect=split,
             ),
         ):
             with self.assertRaisesRegex(ValueError, "Decode failed"):
-                with prepare_long_audio(str(source), "cuda:0", False, "model"):
+                with prepare_long_audio(str(source), False, "model"):
                     self.fail("Preparation should fail")
         self.assertEqual(list(Path(directory).iterdir()), [source])
 

@@ -117,7 +117,7 @@ class R2T2OfflineTest(unittest.TestCase):
             "\u4e09\u4e2a\u65b9\u9762\uff0c\u8fd9\u4e00\u5757\u6709\u4e00\u70b9\u9ad8"
             "\uff0c\u8d44\u672c\u91d15000\u4e07\u5143\uff0c\u5360\u80a150%"
         )
-        expected = raw + "."
+        expected = raw
         tokens = [character for character in raw if character.isalnum()]
         audio = np.zeros(16000, dtype=np.float32)
         engine = R2T2Engine.__new__(R2T2Engine)
@@ -133,17 +133,12 @@ class R2T2OfflineTest(unittest.TestCase):
             tempfile.NamedTemporaryFile() as source,
             patch("app.services.asr.r2t2_engine._load_audio", return_value=audio),
             patch("app.services.asr.r2t2_engine.transcribe_segment", return_value=raw),
-            patch("app.services.asr.punctuation.get_punctuation_model") as punctuation,
         ):
-            # Only the final mark may be copied, even if the punctuation model
-            # proposes changes to interior text or numeric formatting.
-            punctuation.return_value.generate.return_value = [{"text": "rewritten."}]
             result = engine.transcribe_segments(
                 [SimpleNamespace(temp_file=source.name, start_sec=0, end_sec=1)],
                 word_timestamps=True,
             )[0]
             self.assertEqual(result.text, expected)
-            punctuation.return_value.generate.assert_called_once_with(input=[raw])
             engine.aligner.align_transcript.assert_called_once_with(
                 audio_path=source.name, text=expected, audio=audio
             )

@@ -47,8 +47,8 @@ def test_huggingface_cache_priority_and_snapshot_resolution() -> None:
         (snapshot_dir / "config.json").write_text("{}", encoding="utf-8")
 
         with patched_env(
-            FUNASR_TEST_HF_CACHE=str(cache_root),
-            HF_HUB_CACHE="$FUNASR_TEST_HF_CACHE",
+            ASR_TEST_HF_CACHE=str(cache_root),
+            HF_HUB_CACHE="$ASR_TEST_HF_CACHE",
             HF_HOME=str(Path(temp_dir) / "ignored-home"),
             XDG_CACHE_HOME=str(Path(temp_dir) / "ignored-xdg"),
         ):

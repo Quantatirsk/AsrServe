@@ -94,13 +94,10 @@ class DiarizedPipelineTest(unittest.TestCase):
         speech_segments: list[tuple[int, int]] | None = None,
     ) -> list[AudioSegment]:
         self.assertEqual(audio_path, str(self.source))
-        # The splitter reuses diarization's unioned activity whenever it ran, and
-        # only falls back to VAD when diarization was disabled.
+        # Both label modes reuse the same unioned Nemotron activity.
         self.assertEqual(
             speech_segments,
-            self.diarizer.diarize.return_value.speech_intervals_ms()
-            if self.diarizer.diarize.called
-            else None,
+            self.diarizer.diarize.return_value.speech_intervals_ms(),
         )
         chunks = []
         for index, (start, end) in enumerate(((10000, 13000), (13000, 14000))):
@@ -110,9 +107,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         return chunks
 
     def transcribe(self, **kwargs: object) -> ASRFullResult:
-        return self.engine.transcribe_long_audio(
-            str(self.source), enable_punctuation=False, **kwargs
-        )
+        return self.engine.transcribe_long_audio(str(self.source), **kwargs)
 
     def assert_cleaned(self) -> None:
         self.assertEqual(list(self.directory.iterdir()), [self.source])
@@ -218,11 +213,11 @@ class DiarizedPipelineTest(unittest.TestCase):
         self.assertEqual(result.speaker_segments, self.spans)
         self.assert_cleaned()
 
-    def test_disabled_diarization_and_words_skip_both_models(self) -> None:
+    def test_disabled_labels_still_detect_activity_without_alignment(self) -> None:
         result = self.transcribe(
             enable_speaker_diarization=False, word_timestamps=False
         )
-        self.get_diarizer.assert_not_called()
+        self.diarizer.diarize.assert_called_once_with(str(self.source))
         self.engine.aligner.align_transcript.assert_not_called()
         self.assertEqual(len(result.segments), 2)
         self.assertTrue(
@@ -236,7 +231,7 @@ class DiarizedPipelineTest(unittest.TestCase):
 
     def test_requested_words_still_work_without_diarization(self) -> None:
         result = self.transcribe(enable_speaker_diarization=False, word_timestamps=True)
-        self.get_diarizer.assert_not_called()
+        self.diarizer.diarize.assert_called_once_with(str(self.source))
         self.assertEqual(self.engine.aligner.align_transcript.call_count, 2)
         self.assertEqual(result.segments[0].word_tokens[1].start_time, 1)
         self.assertEqual(result.segments[0].start_time, 10)
@@ -252,6 +247,25 @@ class DiarizedPipelineTest(unittest.TestCase):
         self.assertEqual(result.text, "First. Yes! Mixed.\nAfter.")
         self.assertTrue(all(segment.speaker_id is None for segment in result.segments))
         self.assertEqual(result.speaker_segments, [])
+        self.assert_cleaned()
+
+    def test_empty_activity_without_labels_keeps_unpunctuated_asr_without_alignment(
+        self,
+    ) -> None:
+        self.diarizer.diarize.return_value = DiarizationResult(
+            [], np.zeros((1400, 8)), 0.01, 14, (None,) * 8
+        )
+        self.recognize.side_effect = ["quiet speech", "short"]
+        result = self.transcribe(
+            enable_speaker_diarization=False, word_timestamps=False
+        )
+        self.assertEqual(result.text, "quiet speech\nshort")
+        self.assertEqual(self.recognize.call_count, 2)
+        self.engine.aligner.align_transcript.assert_not_called()
+        self.assertIsNone(result.speaker_segments)
+        self.assertTrue(
+            all(s.speaker_id is None and s.word_tokens is None for s in result.segments)
+        )
         self.assert_cleaned()
 
     def test_silent_recognition_returns_empty_without_fabricated_speakers(self) -> None:
@@ -279,8 +293,12 @@ class DiarizedPipelineTest(unittest.TestCase):
         self,
     ) -> None:
         self.diarizer.diarize.side_effect = RuntimeError("Diarization failed")
-        with self.assertRaisesRegex(RuntimeError, "Diarization failed"):
-            self.transcribe()
+        for enabled in (True, False):
+            with (
+                self.subTest(labels=enabled),
+                self.assertRaisesRegex(RuntimeError, "Diarization failed"),
+            ):
+                self.transcribe(enable_speaker_diarization=enabled)
         self.splitter.assert_not_called()
         self.recognize.assert_not_called()
         self.assert_cleaned()

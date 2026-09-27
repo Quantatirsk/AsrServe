@@ -16,7 +16,6 @@ from .engines import ASRFullResult, ASRSegmentResult, WordToken
 from .forced_aligner import ForcedAligner, _load_audio
 from .long_audio import prepare_long_audio
 from .rust_backend import RustForcedAligner
-from .punctuation import restore_sentence_endings
 
 if TYPE_CHECKING:
     from app.utils.audio_splitter import AudioSegment
@@ -43,7 +42,6 @@ class R2T2Engine:
         self,
         segments: Sequence[AudioSegment],
         hotwords: str = "",
-        enable_punctuation: bool = True,
         sample_rate: int = 16000,
         word_timestamps: bool = False,
     ) -> list[ASRSegmentResult]:
@@ -59,8 +57,6 @@ class R2T2Engine:
             )
         finally:
             pool.shutdown(cancel_futures=True)
-        if enable_punctuation:
-            texts = restore_sentence_endings(texts)
         results = []
         for segment, audio, text in zip(segments, audios, texts):
             words = None
@@ -90,7 +86,6 @@ class R2T2Engine:
         self,
         audio_path: str,
         hotwords: str = "",
-        enable_punctuation: bool = True,
         sample_rate: int = 16000,
         enable_speaker_diarization: bool = True,
         word_timestamps: bool = False,
@@ -99,7 +94,6 @@ class R2T2Engine:
     ) -> ASRFullResult:
         with prepare_long_audio(
             audio_path,
-            self.device,
             enable_speaker_diarization,
             self.model_id,
             task_id,
@@ -107,7 +101,6 @@ class R2T2Engine:
             results = self.transcribe_segments(
                 audio.segments,
                 hotwords=hotwords,
-                enable_punctuation=enable_punctuation,
                 sample_rate=sample_rate,
                 word_timestamps=word_timestamps or enable_speaker_diarization,
             )

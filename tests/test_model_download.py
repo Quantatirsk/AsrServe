@@ -17,7 +17,6 @@ class ModelDownloadTest(unittest.TestCase):
             metadata.write_text("pinned-revision\netag\n123\n")
             (source / "config.json").write_text("{}")
             asset = ModelAsset(
-                "huggingface",
                 "nvidia/Nemotron-3-Diarization",
                 "Nemotron",
                 revision="pinned-revision",
@@ -31,7 +30,6 @@ class ModelDownloadTest(unittest.TestCase):
                             (
                                 asset.model_id,
                                 asset.description,
-                                asset.source,
                                 asset.revision,
                             )
                         ],
@@ -41,10 +39,6 @@ class ModelDownloadTest(unittest.TestCase):
                 patch(
                     "app.utils.download_models.is_huggingface_offline",
                     return_value=False,
-                ),
-                patch(
-                    "app.utils.download_models.get_download_modelscope_assets",
-                    return_value=[],
                 ),
                 patch(
                     "app.utils.download_models.get_huggingface_assets",
@@ -70,7 +64,6 @@ class ModelDownloadTest(unittest.TestCase):
                     (
                         "nvidia/Nemotron-3-Diarization",
                         "Nemotron",
-                        "huggingface",
                         "revision",
                     )
                 ],

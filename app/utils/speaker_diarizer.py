@@ -41,9 +41,8 @@ class DiarizationResult:
         """Union speaker activity into speech intervals for offline segmentation.
 
         Nemotron's official extraction already smooths frame-level noise, so the
-        offline splitter reuses these intervals instead of running a second
-        full-recording VAD pass over the same audio. Gaps between intervals are
-        silence, which is exactly where a segment boundary belongs.
+        offline splitter reuses these intervals in both label modes. Gaps are
+        regions with no detected speaker activity, not proof of acoustic silence.
         """
         merged: list[list[int]] = []
         for span in sorted(self.segments, key=lambda span: span.start_sec):

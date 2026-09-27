@@ -43,7 +43,6 @@ CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -
 ## 模型与运行数据
 
 - `models/huggingface`：R2T2 和强制对齐模型缓存。
-- `models/modelscope`：VAD 与标点模型缓存。
 - `models/nemotron-3-diarization`：Nemotron，正式服务只读挂载。
 - `logs`：应用日志；`.cache/vllm`：GPU 编译缓存。
 
@@ -60,7 +59,6 @@ uv sync --frozen --extra cpu  # macOS 去掉 --extra cpu
 ./scripts/build-rust.sh
 DEVICE=cpu ./scripts/prepare-models.sh
 HF_HOME="$PWD/models/huggingface" \
-MODELSCOPE_CACHE="$PWD/models/modelscope/hub" \
 DEVICE=cpu OPENBLAS_NUM_THREADS=8 uv run --no-sync python start.py
 ```
 

@@ -94,7 +94,6 @@ class RuntimeRouter:
                 engine.transcribe_long_audio,
                 audio_path=request.audio_path,
                 hotwords=request.hotwords,
-                enable_punctuation=request.enable_punctuation,
                 sample_rate=request.sample_rate,
                 enable_speaker_diarization=request.enable_speaker_diarization,
                 word_timestamps=request.word_timestamps,
