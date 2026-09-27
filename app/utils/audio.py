@@ -369,32 +369,46 @@ def convert_audio_to_wav(
     if not output_path:
         output_path = input_path.rsplit(".", 1)[0] + ".wav"
 
-    try:
-        # 使用librosa加载并重采样
-        audio_data, _ = librosa.load(input_path, sr=target_sr)
-        sf.write(output_path, audio_data, target_sr, format="WAV")
-        return output_path
+    input_options = []
+    if os.path.splitext(input_path)[1].lower() == ".pcm":
+        # Raw PCM has no header; retain the API's mono s16le convention.
+        input_options = ["-f", "s16le", "-ar", str(target_sr), "-ac", "1"]
 
-    except Exception as e:
-        # 尝试使用ffmpeg转换
-        try:
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-f", "s16le",
-                    "-ar", str(target_sr),
-                    "-ac", "1",
-                    "-i", input_path,
-                    "-acodec", "pcm_s16le",
-                    output_path,
-                    "-y",
-                ],
-                check=True,
-                capture_output=True,
-            )
-            return output_path
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            raise DefaultServerErrorException(f"音频格式转换失败: {str(e)}")
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-v",
+                "error",
+                "-xerror",
+                "-y",
+                *input_options,
+                "-i",
+                input_path,
+                "-map",
+                "0:a:0",
+                "-ac",
+                "1",
+                "-ar",
+                str(target_sr),
+                "-c:a",
+                "pcm_s16le",
+                "-f",
+                "wav",
+                output_path,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise DefaultServerErrorException(
+            f"Audio conversion failed: {exc.stderr.strip()}"
+        ) from exc
+    except OSError as exc:
+        raise DefaultServerErrorException(f"Cannot run FFmpeg: {exc}") from exc
+    return output_path
 
 
 def normalize_audio_for_asr(audio_path: str, target_sr: int = 16000) -> NormalizedAudio:
@@ -412,11 +426,18 @@ def normalize_audio_for_asr(audio_path: str, target_sr: int = 16000) -> Normaliz
         # 检查文件扩展名
         file_ext = os.path.splitext(audio_path)[1].lower()
 
-        # 如果已经是WAV格式且采样率正确，直接返回
         if file_ext == ".wav":
-            # 检查采样率
-            _, sr = librosa.load(audio_path, sr=None)
-            if sr == target_sr:
+            try:
+                info = sf.info(audio_path)
+            except sf.LibsndfileError:
+                # The extension may not match the container; let FFmpeg inspect it.
+                info = None
+            if (
+                info is not None
+                and info.format == "WAV"
+                and info.samplerate == target_sr
+                and info.channels == 1
+            ):
                 return NormalizedAudio(path=audio_path)
 
         # 转换为标准WAV格式
