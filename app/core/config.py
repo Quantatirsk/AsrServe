@@ -33,6 +33,7 @@ class Settings:
     # 设备配置
     DEVICE: str = "cpu" if sys.platform == "darwin" else "cuda:0"
     R2T2_CPU_THREADS: int = 8
+    ALIGNMENT_MODE: str = "forced"
 
     # 路径配置
     BASE_DIR: Path = Path(__file__).parent.parent.parent
@@ -77,6 +78,9 @@ class Settings:
 
         # 设备配置
         self.DEVICE = os.getenv("DEVICE", self.DEVICE)
+        self.ALIGNMENT_MODE = os.getenv("ALIGNMENT_MODE", self.ALIGNMENT_MODE)
+        if self.ALIGNMENT_MODE not in {"uniform", "forced"}:
+            raise ValueError("ALIGNMENT_MODE must be uniform or forced")
         self.R2T2_CPU_THREADS = int(
             os.getenv("R2T2_CPU_THREADS", str(self.R2T2_CPU_THREADS))
         )

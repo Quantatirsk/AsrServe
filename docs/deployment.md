@@ -84,3 +84,50 @@ curl http://localhost:17003/health
 CPU 推理不可中途抢占，同时跑实时与离线会增加延迟。历史 M5 Pro 短样本纯识别 RTF 约 0.08–0.13；Linux amd64 完整 5 分钟录音约耗时 310 秒，不能按 Mac 结果承诺实时性能。Linux arm64 已验证构建和动态库加载，完整模型链路尚未验收。
 
 Nemotron 最多支持 8 个说话人。混合语言可能漏词，重叠发言仍受单路 ASR 限制；时间戳边界合法不代表人工对齐准确。模型质量和长时并发须在目标硬件用真实录音验收。
+
+## macOS 登录自启
+
+使用用户级 LaunchAgent，开机登录后启动，退出登录时停止；不需要 `sudo`。
+先完成原生 CPU 的依赖安装和 Rust 构建，然后安装服务：
+
+```bash
+uv sync --frozen
+./scripts/build-rust.sh
+ALIGNMENT_MODE=uniform HF_HOME="$PWD/models/huggingface" \
+  ./scripts/start-native.sh --download-models
+uv run --no-sync python scripts/macos-service.py install
+```
+
+安装器立即启动服务，默认 CPU、8 个 Rust 线程、1 个实时会话和 `uniform` 对齐。
+安装器将 Git 已跟踪文件、编译好的 Rust 库和 `.env` 复制到
+`~/Library/Application Support/AsrServe`，在那里创建独立 `.venv`。
+模型通过 macOS APFS 克隆复制到运行目录，避免重复占用初始数据块。
+这避开后台进程访问 `Documents` 的隐私限制，不需要全磁盘访问权限。
+启动不会安装依赖或编译；更新源码或 `.env` 后重新运行安装器。
+
+`ALIGNMENT_MODE=forced` 使用 Qwen ForcedAligner；`uniform` 按文本单元均分音频片段时长，
+中文按字、英文按词，不下载、校验或加载 ForcedAligner。
+均分时间戳不反映实际停顿，也可能影响说话人切换处的字词归属。
+Verbose JSON 的 `word_timestamp_method` 和响应头 `X-Word-Timestamp-Method`
+分别标记 `forced_alignment` 或 `uniform_fallback`，后者是主动选择的估算模式。
+普通启动默认 `forced`，LaunchAgent 默认 `uniform`。
+
+重新安装可以更改对齐模式和线程数：
+
+```bash
+uv run --no-sync python scripts/macos-service.py install --alignment-mode forced --threads 8
+```
+
+LaunchAgent 明确设置的参数优先于仓库 `.env`；其余配置由复制后的 `.env` 提供。
+以下路径均相对于运行目录：模型存放于 `models/`，后台输出在 `logs/launchd.stdout.log`、`logs/launchd.stderr.log`，
+应用日志使用现有轮转设置。长时间运行时定期清理 launchd 的输出日志。
+服务监听 `0.0.0.0:8000`，局域网访问可在 `.env` 配置 `API_KEY`。
+
+```bash
+uv run --no-sync python start.py --healthcheck
+launchctl print "gui/$(id -u)/com.asrserve.native"
+launchctl kickstart -k "gui/$(id -u)/com.asrserve.native"
+uv run --no-sync python scripts/macos-service.py uninstall
+```
+
+卸载只停止自启并删除 plist，保留模型、配置和日志。休眠期间不提供推理服务。

@@ -16,6 +16,7 @@ from .engines import ASRFullResult, ASRSegmentResult, WordToken
 from .forced_aligner import ForcedAligner, _load_audio
 from .long_audio import prepare_long_audio
 from .rust_backend import RustForcedAligner
+from .uniform_alignment import uniform_word_timestamps
 
 if TYPE_CHECKING:
     from app.utils.audio_splitter import AudioSegment
@@ -29,13 +30,17 @@ class R2T2Engine:
         self.device = detect_device(settings.DEVICE)
         self.model_id = MODEL_ID
         self.aligner = (
-            RustForcedAligner(forced_aligner_path)
-            if self.device == "cpu"
-            else ForcedAligner(forced_aligner_path)
+            None
+            if settings.ALIGNMENT_MODE == "uniform"
+            else (
+                RustForcedAligner(forced_aligner_path)
+                if self.device == "cpu"
+                else ForcedAligner(forced_aligner_path)
+            )
         )
 
     def close(self) -> None:
-        if self.device == "cpu":
+        if self.device == "cpu" and self.aligner is not None:
             self.aligner.close()
 
     def transcribe_segments(
@@ -65,7 +70,9 @@ class R2T2Engine:
         results = []
         for segment, audio, text in zip(segments, audios, texts):
             words = None
-            if word_timestamps:
+            if word_timestamps and self.aligner is None:
+                words = uniform_word_timestamps(text, len(audio) / 16000)
+            elif word_timestamps:
                 aligned = self.aligner.align_transcript(
                     audio_path=segment.temp_file, text=text, audio=audio
                 )
@@ -109,6 +116,11 @@ class R2T2Engine:
                 sample_rate=sample_rate,
                 word_timestamps=word_timestamps or enable_speaker_diarization,
             )
-            return audio.finish(
+            result = audio.finish(
                 results, timestamp_scale, word_timestamps=word_timestamps
             )
+            if word_timestamps or enable_speaker_diarization:
+                result.word_timestamp_method = (
+                    "uniform_fallback" if self.aligner is None else "forced_alignment"
+                )
+            return result

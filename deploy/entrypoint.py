@@ -215,8 +215,9 @@ def main() -> int:
         return 1
     os.environ["DEVICE"] = device
     logger.info(
-        "Inference device: %s; shared offline/streaming R2T2 and independent aligner",
+        "Inference device: %s; shared R2T2; alignment_mode=%s",
         device,
+        settings.ALIGNMENT_MODE,
     )
     if not ensure_models_downloaded():
         return 1

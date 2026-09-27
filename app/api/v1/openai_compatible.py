@@ -106,6 +106,7 @@ class VerboseTranscriptionResponse(BaseModel):
     segments: List[TranscriptionSegment] = Field(default_factory=list)
     words: Optional[List[TranscriptionWord]] = None
     speaker_segments: Optional[List[SpeakerActivity]] = None
+    word_timestamp_method: Optional[str] = None
 
 
 class ModelObject(BaseModel):
@@ -231,6 +232,7 @@ def build_transcription_payload(
             text=asr_result.text,
             segments=segments,
             words=words if words else None,
+            word_timestamp_method=asr_result.word_timestamp_method,
             speaker_segments=(
                 [
                     SpeakerActivity(
@@ -554,9 +556,7 @@ async def create_transcription(
         examples=["verbose_json", "json", "text", "srt", "vtt"],
     ),
     # 6. 兼容性参数（暂不支持）
-    prompt: Optional[str] = Form(
-        None, description="提示文本（暂不支持，保留兼容）"
-    ),  # noqa: ARG001
+    prompt: Optional[str] = Form(None, description="提示文本（暂不支持，保留兼容）"),  # noqa: ARG001
     temperature: Optional[float] = Form(
         0, description="采样温度（暂不支持，保留兼容）"
     ),  # noqa: ARG001
@@ -607,11 +607,18 @@ async def create_transcription(
             ),
         )
         if response_format in {ResponseFormat.VERBOSE_JSON, ResponseFormat.JSON}:
-            return create_heartbeat_streaming_response(
+            response = create_heartbeat_streaming_response(
                 response_format=response_format,
                 inference_task=inference_task,
                 language=language,
             )
+            if word_timestamps or enable_speaker_diarization:
+                response.headers["X-Word-Timestamp-Method"] = (
+                    "uniform_fallback"
+                    if settings.ALIGNMENT_MODE == "uniform"
+                    else "forced_alignment"
+                )
+            return response
 
         asr_result = await inference_task
         payload, _, _ = build_transcription_payload(
@@ -620,9 +627,16 @@ async def create_transcription(
             audio_duration=asr_result.duration,
             language=language,
         )
+        headers = (
+            {"X-Word-Timestamp-Method": asr_result.word_timestamp_method}
+            if asr_result.word_timestamp_method
+            else {}
+        )
         if response_format == ResponseFormat.VTT:
-            return PlainTextResponse(content=payload, media_type="text/vtt")
-        return PlainTextResponse(content=payload)
+            return PlainTextResponse(
+                content=payload, media_type="text/vtt", headers=headers
+            )
+        return PlainTextResponse(content=payload, headers=headers)
 
     except HTTPException as http_exc:
         # 将 HTTPException 转换为标准错误格式
