@@ -18,7 +18,7 @@ class Settings:
     """统一应用配置类"""
 
     # 应用信息
-    APP_NAME: str = "R2T2 ASR Server"
+    APP_NAME: str = "AsrServe"
     APP_VERSION: str = "1.0.3"
     APP_DESCRIPTION: str = "R2T2 offline and realtime speech recognition"
 
@@ -39,7 +39,7 @@ class Settings:
     TEMP_DIR: str = "temp"
     # 日志配置
     LOG_LEVEL: str = "INFO"
-    LOG_FILE: Optional[str] = str(BASE_DIR / "logs" / "qwen3-asr.log")
+    LOG_FILE: Optional[str] = str(BASE_DIR / "logs" / "asrserve.log")
     LOG_MAX_BYTES: int = 20 * 1024 * 1024  # 20MB
     LOG_BACKUP_COUNT: int = 50  # 保留50个备份文件
 

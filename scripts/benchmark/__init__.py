@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Qwen3-ASR 并发性能测试脚本
+AsrServe 并发性能测试脚本
 
 用于测试 ASR WebSocket 服务在不同并发级别下的性能表现。
 """

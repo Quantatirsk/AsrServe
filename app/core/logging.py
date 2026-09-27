@@ -276,7 +276,7 @@ def setup_logging(
     if log_file_path:
         log_path = Path(log_file_path)
     else:
-        log_path = Path("logs/qwen3-asr.log")
+        log_path = Path("logs/asrserve.log")
 
     # 确保日志目录存在
     log_dir = log_path.parent
@@ -284,7 +284,7 @@ def setup_logging(
 
     # 多 Worker 模式下，每个 Worker 使用独立的日志文件
     if workers > 1:
-        # Example: qwen3-asr.log -> qwen3-asr.worker-12345.log
+        # Example: asrserve.log -> asrserve.worker-12345.log
         worker_log_path = log_dir / f"{log_path.stem}.{current_worker_id}{log_path.suffix}"
 
         # Worker 专属日志文件

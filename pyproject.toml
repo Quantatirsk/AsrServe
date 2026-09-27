@@ -1,5 +1,5 @@
 [project]
-name = "qwen3-asr"
+name = "asrserve"
 version = "1.0.4"
 description = "R2T2 offline and streaming speech recognition for CUDA and CPU"
 requires-python = ">=3.11,<3.13"

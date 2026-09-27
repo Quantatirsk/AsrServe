@@ -30,7 +30,7 @@ class MarkdownReporter:
         lines = []
 
         # 标题
-        lines.append("# Qwen3-ASR 并发性能测试报告")
+        lines.append("# AsrServe 并发性能测试报告")
         lines.append("")
         lines.append(f"**测试时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 

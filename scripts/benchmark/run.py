@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Qwen3-ASR 并发性能测试主入口
+AsrServe 并发性能测试主入口
 
 使用方法:
     python -m scripts.benchmark.run --audio-file /path/to/audio.wav
@@ -190,7 +190,7 @@ class ConcurrentBenchmark:
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="Qwen3-ASR 并发性能测试脚本",
+        description="AsrServe 并发性能测试脚本",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
