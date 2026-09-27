@@ -22,9 +22,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s "$(command -v python3)" /opt/ascend-python \
     && python3 -m pip freeze --exclude-editable > /tmp/ascend-constraints.txt \
+    && (python3 -m pip check || true) | sort > /tmp/pip-check-base.txt \
     && python3 -m pip install --no-cache-dir -c /tmp/ascend-constraints.txt \
         python-dotenv loguru librosa soundfile websockets \
-    && python3 -m pip check
+    && (python3 -m pip check || true) | sort > /tmp/pip-check-after.txt \
+    && diff /tmp/pip-check-base.txt /tmp/pip-check-after.txt
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
