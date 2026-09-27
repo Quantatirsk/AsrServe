@@ -110,7 +110,7 @@ def main() -> None:
     subprocess.run(["plutil", "-lint", str(agent)], check=True)
     subprocess.run(["launchctl", "bootstrap", domain, str(agent)], check=True)
     print(f"Installed {agent}; starts now and after login")
-    print(f"Logs: {logs}; health: http://127.0.0.1:8000/health")
+    print(f"Logs: {logs}; health: http://127.0.0.1:17003/health")
 
 
 if __name__ == "__main__":

@@ -121,10 +121,10 @@ uv run --no-sync python scripts/macos-service.py install --alignment-mode forced
 LaunchAgent 明确设置的参数优先于仓库 `.env`；其余配置由复制后的 `.env` 提供。
 以下路径均相对于运行目录：模型存放于 `models/`，后台输出在 `logs/launchd.stdout.log`、`logs/launchd.stderr.log`，
 应用日志使用现有轮转设置。长时间运行时定期清理 launchd 的输出日志。
-服务监听 `0.0.0.0:8000`，局域网访问可在 `.env` 配置 `API_KEY`。
+本机脚本固定公共端口为 `0.0.0.0:17003`，内部推理端口仍为 `8001`。局域网访问可在 `.env` 配置 `API_KEY`。
 
 ```bash
-uv run --no-sync python start.py --healthcheck
+./scripts/start-native.sh --healthcheck
 launchctl print "gui/$(id -u)/com.asrserve.native"
 launchctl kickstart -k "gui/$(id -u)/com.asrserve.native"
 uv run --no-sync python scripts/macos-service.py uninstall
