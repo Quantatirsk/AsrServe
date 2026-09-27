@@ -1,7 +1,7 @@
-name: r2t2-asr-ascend
+name: asrserve-ascend
 services:
   asr:
-    image: quantatrisk/qwen3-asr:ascend
+    image: quantatrisk/asrserve:ascend
     ports:
       - "17003:8000"
     shm_size: 1gb

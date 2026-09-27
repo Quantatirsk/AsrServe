@@ -23,12 +23,12 @@ docker compose -f compose.ascend.yml up -d
 docker compose -f compose.ascend.yml logs -f asr
 ```
 
-Compose 只引用 `quantatrisk/qwen3-asr:ascend`，挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2 与 Nemotron 到 `./models`，不下载 Aligner。
+Compose 只引用 `quantatrisk/asrserve:ascend`，挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2 与 Nemotron 到 `./models`，不下载 Aligner。
 
 离线部署时，在有网络的机器预下载后拷贝 `models/`，并在 `.env` 设置 `HF_HUB_OFFLINE=1`：
 
 ```bash
-IMAGE=quantatrisk/qwen3-asr:ascend ./scripts/prepare-models.sh
+IMAGE=quantatrisk/asrserve:ascend ./scripts/prepare-models.sh
 ```
 
 预下载不访问 NPU；没有 Ascend 镜像的机器可用 `:gpu` 或 `:cpu` 镜像，会额外下载一个不使用的 Aligner。

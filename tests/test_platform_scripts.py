@@ -19,4 +19,4 @@ class PlatformScriptsTest(unittest.TestCase):
             ).splitlines()
         self.assertEqual(result, ['run', '--rm', '-e', 'HF_ENDPOINT', '-v',
                                   f'{root}/models:/app/models',
-                                  'quantatrisk/qwen3-asr:gpu', '--download-models'])
+                                  'quantatrisk/asrserve:gpu', '--download-models'])

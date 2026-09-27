@@ -1,7 +1,7 @@
-name: r2t2-asr
+name: asrserve
 services:
   asr:
-    image: quantatrisk/qwen3-asr:gpu
+    image: quantatrisk/asrserve:gpu
     ports:
       - "17003:8000"
     shm_size: 4gb
