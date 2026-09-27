@@ -40,7 +40,7 @@ Breaking changes:
 - **Speaker diarization**: CAM++ is replaced by [Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization) (up to 8 speakers). Realtime streams now also carry per-utterance speaker labels.
 - **Removed models**: FSMN VAD, the three CAM++ models and the Qwen3-ASR checkpoints are gone. Nemotron speech activity drives offline segmentation. ModelScope and FunASR are no longer dependencies; all models come from Hugging Face at pinned revisions.
 - **Removed API**: the Alibaba Cloud compatible REST API (`/stream/v1/asr*`) is removed. Use the OpenAI-compatible `/v1/audio/transcriptions` and the native `/v1/stream` WebSocket.
-- **Deployment**: images are prebuilt by `build.sh` as `quantatrisk/asrserve:gpu` / `:cpu`; Compose files are `compose.yml` (GPU) and `compose.cpu.yml` (CPU) and no longer build. The only mount is `./models`. `docker-compose*.yml`, `deploy/prepare.sh` and the model export option are removed.
+- **Deployment**: images are published on Docker Hub as `quantatrisk/asrserve:gpu` (amd64), `:cpu` (amd64/arm64) and `:ascend` (arm64, Ascend 910B branch), plus `1.0.4-*` version tags; `build.sh` builds from source. Compose files are `compose.yml` (GPU) and `compose.cpu.yml` (CPU) and no longer build. The only mount is `./models`. `docker-compose*.yml`, `deploy/prepare.sh` and the model export option are removed. The old `quantatrisk/qwen3-asr` Docker Hub repository is retired.
 - **Runtime**: the CUDA image moves to CUDA 13.0 and vLLM 0.30; the service listens on port `17003`.
 
 Older release notes: [GitHub Releases](https://github.com/Quantatirsk/asrserve/releases).
@@ -59,14 +59,11 @@ Older release notes: [GitHub Releases](https://github.com/Quantatirsk/asrserve/r
 ## Quick Start
 
 ```bash
-# GPU
-./build.sh
-docker compose up -d
-
-# CPU
-TARGET=cpu ./build.sh
-docker compose -f compose.cpu.yml up -d
+docker compose up -d                        # GPU: quantatrisk/asrserve:gpu
+docker compose -f compose.cpu.yml up -d     # CPU: quantatrisk/asrserve:cpu (amd64/arm64)
 ```
+
+Images are pulled from Docker Hub on first start; upgrade with `docker compose pull && docker compose up -d`. To build from source, run `./build.sh` (CPU: `TARGET=cpu ./build.sh`). Ascend 910B lives on the [`ascend-910b`](https://github.com/Quantatirsk/asrserve/tree/ascend-910b) branch.
 
 On macOS, run natively instead (see [Deployment](docs/deployment.md#原生-cpu)):
 

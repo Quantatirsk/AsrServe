@@ -4,19 +4,24 @@
 
 需要 Docker Compose 2.24+。GPU 还需 NVIDIA 驱动和 NVIDIA Container Toolkit，支持 Linux amd64；CPU 支持 Linux amd64/arm64，x86 要求 x86-64-v3（含 AVX2/FMA）。macOS/Windows 可使用 Docker Desktop 的 Linux 容器，Windows 尚未实机验收。
 
-镜像由 `build.sh` 预构建，Compose 只引用镜像：
+Compose 只引用镜像，不含构建参数：
 
 ```bash
-./build.sh && docker compose up -d                                     # GPU → :gpu
-TARGET=cpu ./build.sh && docker compose -f compose.cpu.yml up -d       # CPU → :cpu
+docker compose up -d                        # GPU
+docker compose -f compose.cpu.yml up -d     # CPU
 docker compose logs -f asr
 ```
 
-GPU 镜像为 `quantatrisk/asrserve:gpu`（linux/amd64），CPU 镜像为 `quantatrisk/asrserve:cpu`（默认本机架构，`TARGET=cpu ./build.sh --platform linux/arm64` 交叉构建）。代码更新后重新构建再 `up -d`。首次启动自动下载缺失模型，健康检查宽限 600 秒。
+| 镜像 | 架构 | 版本标签 |
+| --- | --- | --- |
+| `quantatrisk/asrserve:gpu` | linux/amd64 | `1.0.4-gpu` |
+| `quantatrisk/asrserve:cpu` | linux/amd64、linux/arm64 | `1.0.4-cpu` |
+
+本地没有镜像时自动从 Docker Hub 拉取，升级执行 `docker compose pull && docker compose up -d`。需要固定版本时把 compose 的 `image` 改为版本标签。从源码构建：`./build.sh` 生成 `:gpu`，`TARGET=cpu ./build.sh` 生成本机架构的 `:cpu`，同名标签会覆盖拉取的镜像。首次启动自动下载缺失模型，健康检查宽限 600 秒。
 
 ### 离线部署
 
-在有网络的机器构建镜像并预下载模型，再用 `docker save`/`docker load` 迁移镜像，把整个仓库目录（含 `models/`）拷到目标机：
+在有网络的机器拉取镜像并预下载模型，再用 `docker save`/`docker load` 迁移镜像，把整个仓库目录（含 `models/`）拷到目标机：
 
 ```bash
 ./scripts/prepare-models.sh                                   # 用 :gpu 镜像
