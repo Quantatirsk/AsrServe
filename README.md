@@ -16,7 +16,7 @@ Self-hosted realtime and offline speech recognition. AsrServe always ships state
 
 ## Live Demo Site
 
-- **Web Demo**: https://asr.vect.one
+- **Web Demo**: https://asr.ieeio.com
 
 ## Demo
 
@@ -43,7 +43,7 @@ Breaking changes:
 - **Deployment**: images are published on Docker Hub as `quantatrisk/asrserve:gpu` (amd64), `:cpu` (amd64/arm64) and `:ascend` (arm64, Ascend 910B branch), plus `1.0.4-*` version tags; `build.sh` builds from source. Compose files are `compose.yml` (GPU) and `compose.cpu.yml` (CPU) and no longer build. The only mount is `./models`. `docker-compose*.yml`, `deploy/prepare.sh` and the model export option are removed. The old `quantatrisk/qwen3-asr` Docker Hub repository is no longer updated.
 - **Runtime**: the CUDA image moves to CUDA 13.0 and vLLM 0.30; the service listens on port `17003`.
 
-Older release notes: [GitHub Releases](https://github.com/Quantatirsk/asrserve/releases).
+Older release notes: [GitHub Releases](https://github.com/Quantatirsk/AsrServe/releases).
 
 ## Features
 
@@ -63,7 +63,7 @@ docker compose up -d                        # GPU: quantatrisk/asrserve:gpu
 docker compose -f compose.cpu.yml up -d     # CPU: quantatrisk/asrserve:cpu (amd64/arm64)
 ```
 
-Images are pulled from Docker Hub on first start; upgrade with `docker compose pull && docker compose up -d`. To build from source, run `./build.sh` (CPU: `TARGET=cpu ./build.sh`). Ascend 910B lives on the [`ascend-910b`](https://github.com/Quantatirsk/asrserve/tree/ascend-910b) branch.
+Images are pulled from Docker Hub on first start; upgrade with `docker compose pull && docker compose up -d`. To build from source, run `./build.sh` (CPU: `TARGET=cpu ./build.sh`). Ascend 910B lives on the [`ascend-910b`](https://github.com/Quantatirsk/AsrServe/tree/ascend-910b) branch.
 
 On macOS, run natively instead (see [Deployment](docs/deployment.md#原生-cpu)):
 
