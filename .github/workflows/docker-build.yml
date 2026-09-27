@@ -84,7 +84,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Tag multi-arch image
         run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
           docker buildx imagetools create \
             -t "$IMAGE:${{ matrix.flavor }}" -t "$IMAGE:$version-${{ matrix.flavor }}" \
             $(printf "$IMAGE@sha256:%s " $(ls digests))
