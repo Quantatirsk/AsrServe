@@ -31,10 +31,12 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 # Never install the Nemotron Transformers pin or CPU torch into the NPU environment.
+# The NPU driver is mounted at runtime; the import check links against the CANN stub.
 RUN uv sync --frozen --no-dev --no-install-project --extra cpu \
     && uv pip check --python /opt/api-venv/bin/python \
     && /opt/api-venv/bin/python -c "from transformers import Nemotron3DiarizationForAudioFrameClassification, Nemotron3DiarizationProcessor" \
-    && /opt/ascend-python -c "import torch_npu, vllm; from vllm.transformers_utils.processors.qwen3_asr import Qwen3ASRProcessor; from vllm.v1.engine.async_llm import AsyncLLM"
+    && hal="$(find /usr/local/Ascend -name libascend_hal.so -print -quit)" \
+    && LD_LIBRARY_PATH="$(dirname "${hal:-.}"):${LD_LIBRARY_PATH:-}" /opt/ascend-python -c "import torch_npu, vllm; from vllm.transformers_utils.processors.qwen3_asr import Qwen3ASRProcessor; from vllm.v1.engine.async_llm import AsyncLLM"
 COPY app ./app
 COPY deploy ./deploy
 COPY start.py ./
