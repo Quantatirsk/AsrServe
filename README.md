@@ -1,19 +1,19 @@
-# Qwen3 ASR
+# AsrServe
 
-基于 Confucius4-R2T2 的实时与离线语音识别服务，支持 NVIDIA GPU、Linux CPU（amd64/arm64）和 macOS Apple Silicon CPU。
+自部署的实时与离线语音识别服务。本项目始终采用 SOTA 开源模型和最高效的推理方案，识别质量是第一优先级；当前组合为 Confucius4-R2T2 识别、Nemotron 说话人分离、Qwen3-ForcedAligner 字词时间戳。
 
+- 支持 NVIDIA GPU、Linux CPU（amd64/arm64），并原生适配 macOS Apple Silicon：内置 Rust 推理后端，无需 Docker 或 GPU 即可本机运行完整链路。
 - 实时与离线共用一份 R2T2 权重；离线独立识别原始录音。
-- Nemotron 提供说话人分离，Qwen3-ForcedAligner 提供字词时间戳。
 - 提供 OpenAI 兼容转写接口和浏览器录音页面。
 
 ## Docker 启动
 
 ```bash
-# GPU：镜像 quantatrisk/qwen3-asr:gpu，配置 compose.yml
+# GPU：镜像 quantatrisk/asrserve:gpu，配置 compose.yml
 ./build.sh
 docker compose up -d
 
-# CPU：镜像 quantatrisk/qwen3-asr:cpu，配置 compose.cpu.yml
+# CPU：镜像 quantatrisk/asrserve:cpu，配置 compose.cpu.yml
 TARGET=cpu ./build.sh
 docker compose -f compose.cpu.yml up -d
 ```

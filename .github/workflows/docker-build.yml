@@ -37,6 +37,6 @@ jobs:
           file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
           push: false
-          tags: qwen3-asr:ci
+          tags: asrserve:ci
           cache-from: type=gha,scope=${{ matrix.file }}-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.file }}-${{ matrix.platform }}

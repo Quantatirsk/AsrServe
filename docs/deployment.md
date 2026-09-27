@@ -12,7 +12,7 @@ TARGET=cpu ./build.sh && docker compose -f compose.cpu.yml up -d       # CPU →
 docker compose logs -f asr
 ```
 
-GPU 镜像为 `quantatrisk/qwen3-asr:gpu`（linux/amd64），CPU 镜像为 `quantatrisk/qwen3-asr:cpu`（默认本机架构，`TARGET=cpu ./build.sh --platform linux/arm64` 交叉构建）。代码更新后重新构建再 `up -d`。首次启动自动下载缺失模型，健康检查宽限 600 秒。
+GPU 镜像为 `quantatrisk/asrserve:gpu`（linux/amd64），CPU 镜像为 `quantatrisk/asrserve:cpu`（默认本机架构，`TARGET=cpu ./build.sh --platform linux/arm64` 交叉构建）。代码更新后重新构建再 `up -d`。首次启动自动下载缺失模型，健康检查宽限 600 秒。
 
 ### 离线部署
 
@@ -20,7 +20,7 @@ GPU 镜像为 `quantatrisk/qwen3-asr:gpu`（linux/amd64），CPU 镜像为 `quan
 
 ```bash
 ./scripts/prepare-models.sh                                   # 用 :gpu 镜像
-IMAGE=quantatrisk/qwen3-asr:cpu ./scripts/prepare-models.sh   # 用 :cpu 镜像
+IMAGE=quantatrisk/asrserve:cpu ./scripts/prepare-models.sh   # 用 :cpu 镜像
 ```
 
 脚本在服务镜像内下载并校验，只挂载 `./models`，不需要 GPU；两个镜像下载的模型相同。需要镜像站时加 `HF_ENDPOINT=https://hf-mirror.com`。目标机在 `.env` 设置 `HF_HUB_OFFLINE=1`，模型缺失时启动失败而不是联网。

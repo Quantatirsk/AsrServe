@@ -1,7 +1,7 @@
-name: r2t2-asr-cpu
+name: asrserve-cpu
 services:
   asr:
-    image: quantatrisk/qwen3-asr:cpu
+    image: quantatrisk/asrserve:cpu
     ports:
       - "17003:8000"
     init: true
