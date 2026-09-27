@@ -286,7 +286,7 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual(result[0].speaker_id, "A")
         self.assert_preserved(source, result)
 
-    def test_same_speaker_paragraph_has_no_duration_limit(self) -> None:
+    def test_same_speaker_paragraph_joins_pauses_up_to_duration_limit(self) -> None:
         source = [
             turn("First. ", 841, 845, "A"),
             turn("And. ", 846.2, 846.5, "A"),
@@ -298,6 +298,18 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual((result[0].start_time, result[0].end_time), (841, 872))
         self.assert_preserved(source, result)
+
+    def test_long_monologue_splits_into_bounded_paragraphs(self) -> None:
+        source = [turn(f"Part {i}. ", i * 30, i * 30 + 29, "A") for i in range(15)]
+        result = consolidate_speaker_turns(source)
+        self.assert_preserved(source, result)
+        self.assertEqual(len(result), 8)
+        self.assertTrue(all(s.end_time - s.start_time <= 60 for s in result))
+        # Without sentence ends, paragraphs still stop at twice the soft limit.
+        unpunctuated = [turn("part", i * 30, i * 30 + 29, "A") for i in range(15)]
+        result = consolidate_speaker_turns(unpunctuated)
+        self.assert_preserved(unpunctuated, result)
+        self.assertTrue(all(s.end_time - s.start_time <= 120 for s in result))
 
     def test_adjacent_main_speaker_groups_merge_and_rebase_words(self) -> None:
         source = [turn("First. ", 10, 12, "A"), turn("Next!", 13, 15, "A")]

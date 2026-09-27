@@ -42,8 +42,7 @@ class SegmentBoundsTest(unittest.TestCase):
             duration=95.0,
             speaker_ids=("说话人1", "说话人2") + (None,) * 6,
         )
-        # Overlapping turns become one span; the silence between 70 s and 90 s is
-        # kept as a gap so a cut can land there.
+        # Overlapping turns become one span; the 70-90 s gap is a cut hint.
         self.assertEqual(
             overlapping.speech_intervals_ms(), [(1000, 70000), (90000, 95000)]
         )
@@ -64,17 +63,33 @@ class SegmentBoundsTest(unittest.TestCase):
                 speech_segments=overlapping.speech_intervals_ms(),
             )
         self.assertTrue(all(0 < segment.duration_ms <= 60000 for segment in segments))
-        self.assertEqual(segments[0].start_ms, 1000)
-        self.assertEqual(segments[-1].end_ms, 95000)
-        # Only the 70-90 s silence is dropped; no speech interval is truncated.
-        self.assertEqual(sum(segment.duration_ms for segment in segments), 69000 + 5000)
+        # Gaps without detected activity may hold quiet speech, so none is dropped.
+        self.assertEqual(
+            [(s.start_ms, s.end_ms) for s in segments],
+            [
+                (0, 1000),
+                (1000, 61000),
+                (61000, 70000),
+                (70000, 90000),
+                (90000, 95000),
+            ],
+        )
 
     def test_separated_utterances_are_not_packed_across_pauses(self) -> None:
         # Real R2T2 replay dropped speech when these pauses were packed into a
         # larger request. Paragraph joining must happen after recognition.
         with patch.object(settings, "MAX_SEGMENT_SEC", 60):
             spans = [(0, 20000), (25000, 40000), (50000, 95000)]
-            self.assertEqual(AudioSplitter().merge_segments_greedy(spans, 95000), spans)
+            self.assertEqual(
+                AudioSplitter().merge_segments_greedy(spans, 95000),
+                [
+                    (0, 20000),
+                    (20000, 25000),
+                    (25000, 40000),
+                    (40000, 50000),
+                    (50000, 95000),
+                ],
+            )
 
     def test_empty_activity_retains_silence_and_unrecognized_signal_samples(
         self,
