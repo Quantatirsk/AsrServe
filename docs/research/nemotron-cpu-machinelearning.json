@@ -1,0 +1,124 @@
+{
+  "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "torch": "2.13.0+cu130",
+  "dtype": "torch.float32",
+  "device": "cpu",
+  "audio": "/benchmark/2speakers_example.wav",
+  "audio_sha256": "8dd999996bfc3dfbef07d71401dd9043096ffbff576bcccdd8f8ddce33563b14",
+  "audio_seconds": 51.66275,
+  "model_load_seconds": 5.879714085021988,
+  "runs": [
+    {
+      "threads": 1,
+      "offline_seconds": [
+        1.7580484410282224,
+        1.7433479380561039,
+        1.768203453044407
+      ],
+      "offline_rtf": 0.034029323662178694,
+      "speakers": 2,
+      "streaming": [
+        {
+          "seconds": 35.00080265698489,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 536.6334150312468,
+          "chunk_p95_ms": 796.4402160141617,
+          "chunk_max_ms": 861.0740199219435
+        },
+        {
+          "seconds": 35.21772295597475,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 537.540219957009,
+          "chunk_p95_ms": 805.280368484091,
+          "chunk_max_ms": 866.3722999626771
+        },
+        {
+          "seconds": 35.182100153993815,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 537.284174002707,
+          "chunk_p95_ms": 798.4565764782019,
+          "chunk_max_ms": 861.3647749880329
+        }
+      ],
+      "streaming_rtf": 0.6809954978005199
+    },
+    {
+      "threads": 4,
+      "offline_seconds": [
+        0.5261892799753696,
+        1.2493989430367947,
+        0.514828031999059
+      ],
+      "offline_rtf": 0.010185080739514825,
+      "speakers": 2,
+      "streaming": [
+        {
+          "seconds": 13.20588924898766,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 180.11913099326193,
+          "chunk_p95_ms": 325.4002594621852,
+          "chunk_max_ms": 427.3777069756761
+        },
+        {
+          "seconds": 13.003320088027976,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 185.64713594969362,
+          "chunk_p95_ms": 311.14273198181763,
+          "chunk_max_ms": 433.69907897431403
+        },
+        {
+          "seconds": 11.360473938984796,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 164.42292905412614,
+          "chunk_p95_ms": 249.3218914605677,
+          "chunk_max_ms": 277.01109799090773
+        }
+      ],
+      "streaming_rtf": 0.25169624319317063
+    },
+    {
+      "threads": 6,
+      "offline_seconds": [
+        0.8908653300022706,
+        0.9282674390124157,
+        0.9181174709228799
+      ],
+      "offline_rtf": 0.017771362750199707,
+      "speakers": 2,
+      "streaming": [
+        {
+          "seconds": 18.700267661944963,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 281.4077719813213,
+          "chunk_p95_ms": 435.26088749058545,
+          "chunk_max_ms": 461.9086249731481
+        },
+        {
+          "seconds": 18.971890846034512,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 287.84921497572213,
+          "chunk_p95_ms": 419.3597204866819,
+          "chunk_max_ms": 442.1288709854707
+        },
+        {
+          "seconds": 19.21295179706067,
+          "frames": 5165,
+          "active_chunks": 71,
+          "chunk_p50_ms": 297.32643999159336,
+          "chunk_p95_ms": 429.9972135340795,
+          "chunk_max_ms": 462.75832795072347
+        }
+      ],
+      "streaming_rtf": 0.36722572542178866
+    }
+  ],
+  "process_peak_rss_mib": 1672.67578125
+}
