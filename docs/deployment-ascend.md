@@ -18,12 +18,11 @@
 在 910B 宿主机（需 Ascend 驱动）执行：
 
 ```bash
-TARGET=ascend ./build.sh
 docker compose -f compose.ascend.yml up -d
 docker compose -f compose.ascend.yml logs -f asr
 ```
 
-Compose 只引用 `quantatrisk/asrserve:ascend`，挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2 与 Nemotron 到 `./models`，不下载 Aligner。
+Compose 只引用 `quantatrisk/asrserve:ascend`（Docker Hub 发布 linux/arm64，版本标签 `1.0.4-ascend`；x86 宿主机或修改代码后用 `TARGET=ascend ./build.sh` 本地构建），挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2 与 Nemotron 到 `./models`，不下载 Aligner。
 
 离线部署时，在有网络的机器预下载后拷贝 `models/`，并在 `.env` 设置 `HF_HUB_OFFLINE=1`：
 

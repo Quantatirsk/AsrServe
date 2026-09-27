@@ -11,25 +11,19 @@
 单容器双 Python 环境：R2T2 在 NPU，Nemotron 在 CPU；时间戳为明确标记的均分估算。
 
 ```bash
-TARGET=ascend ./build.sh
-docker compose -f compose.ascend.yml up -d
+docker compose -f compose.ascend.yml up -d   # quantatrisk/asrserve:ascend（arm64）
 ```
 
-详见 [910B 部署说明](docs/deployment-ascend.md)。已完成本地烟测，尚未做 NPU 实机验收。
+镜像已发布到 Docker Hub；x86 宿主机或修改代码后用 `TARGET=ascend ./build.sh` 本地构建。详见 [910B 部署说明](docs/deployment-ascend.md)。已完成本地烟测，尚未做 NPU 实机验收。
 
 ## Docker 启动
 
 ```bash
-# GPU：镜像 quantatrisk/asrserve:gpu，配置 compose.yml
-./build.sh
-docker compose up -d
-
-# CPU：镜像 quantatrisk/asrserve:cpu，配置 compose.cpu.yml
-TARGET=cpu ./build.sh
-docker compose -f compose.cpu.yml up -d
+docker compose up -d                        # GPU：quantatrisk/asrserve:gpu
+docker compose -f compose.cpu.yml up -d     # CPU：quantatrisk/asrserve:cpu（amd64/arm64）
 ```
 
-Compose 只引用镜像、不含构建参数；代码更新后重新执行 `build.sh` 再 `up -d`。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
+镜像已发布到 Docker Hub，首次启动自动拉取；升级执行 `docker compose pull && docker compose up -d`。从源码构建用 `./build.sh`（CPU：`TARGET=cpu ./build.sh`）。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
 
 默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 
