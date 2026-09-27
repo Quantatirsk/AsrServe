@@ -9,16 +9,11 @@
 ## Docker 启动
 
 ```bash
-# GPU：镜像 quantatrisk/asrserve:gpu，配置 compose.yml
-./build.sh
-docker compose up -d
-
-# CPU：镜像 quantatrisk/asrserve:cpu，配置 compose.cpu.yml
-TARGET=cpu ./build.sh
-docker compose -f compose.cpu.yml up -d
+docker compose up -d                        # GPU：quantatrisk/asrserve:gpu
+docker compose -f compose.cpu.yml up -d     # CPU：quantatrisk/asrserve:cpu（amd64/arm64）
 ```
 
-Compose 只引用镜像、不含构建参数；代码更新后重新执行 `build.sh` 再 `up -d`。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
+镜像已发布到 Docker Hub，首次启动自动拉取；升级执行 `docker compose pull && docker compose up -d`。从源码构建用 `./build.sh`（CPU：`TARGET=cpu ./build.sh`）。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
 
 默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 
