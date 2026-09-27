@@ -248,6 +248,20 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
         self.assertEqual(result[0].speaker_id, "A")
         self.assert_preserved(source, result)
 
+    def test_same_speaker_paragraph_spans_natural_pauses_up_to_limit(self) -> None:
+        source = [
+            turn("First. ", 841, 845, "A"),
+            turn("And. ", 846.2, 846.5, "A"),
+            turn("Next. ", 847.6, 849, "A"),
+            turn("Continue.", 851, 855, "A"),
+            turn("New paragraph.", 870, 872, "A"),
+        ]
+        result = consolidate_speaker_turns(source)
+        self.assertEqual(len(result), 2)
+        self.assertEqual((result[0].start_time, result[0].end_time), (841, 855))
+        self.assertEqual(result[1].text, "New paragraph.")
+        self.assert_preserved(source, result)
+
     def test_adjacent_main_speaker_groups_merge_and_rebase_words(self) -> None:
         source = [turn("First. ", 10, 12, "A"), turn("Next!", 13, 15, "A")]
         result = consolidate_speaker_turns(source)

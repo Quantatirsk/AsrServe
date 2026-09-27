@@ -56,7 +56,6 @@ def consolidate_speaker_turns(
             turns
             and segment.speaker_id is not None
             and segment.speaker_id == turns[-1].speaker_id
-            and segment.start_time - turns[-1].end_time <= MAX_TURN_GAP_SECONDS
             and segment.end_time - turns[-1].start_time <= MAX_PARAGRAPH_SECONDS
         ):
             turns[-1] = _join_turns([turns[-1], segment])
