@@ -4,21 +4,28 @@
 
 需要 Docker Compose 2.24+。GPU 还需 NVIDIA 驱动和 NVIDIA Container Toolkit，支持 Linux amd64；CPU 支持 Linux amd64/arm64，x86 要求 x86-64-v3（含 AVX2/FMA）。macOS/Windows 可使用 Docker Desktop 的 Linux 容器，Windows 尚未实机验收。
 
-默认 GPU 使用 `compose.yml`。首次部署先构建、下载模型，再启动：
+镜像由 `build.sh` 预构建，Compose 只引用镜像：
 
 ```bash
-docker compose build
-# 模型准备时可写，正式服务中 Nemotron 仍只读挂载
-docker compose run --rm --no-deps \
-  -v ./models/nemotron-3-diarization:/app/models/nemotron-3-diarization \
-  --entrypoint python asr -m app.utils.download_models
-docker compose up -d
+./build.sh && docker compose up -d                                     # GPU → :gpu
+TARGET=cpu ./build.sh && docker compose -f compose.cpu.yml up -d       # CPU → :cpu
 docker compose logs -f asr
 ```
 
-CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -f compose.cpu.yaml build`。两份配置独立使用，镜像都叫 `quantatrisk/qwen3-asr:latest`；切换后端执行对应的 `up -d --build`，避免复用另一后端的同名镜像。已准备完整模型时可跳过下载。
+GPU 镜像为 `quantatrisk/qwen3-asr:gpu`（linux/amd64），CPU 镜像为 `quantatrisk/qwen3-asr:cpu`（默认本机架构，`TARGET=cpu ./build.sh --platform linux/arm64` 交叉构建）。代码更新后重新构建再 `up -d`。首次启动自动下载缺失模型，健康检查宽限 600 秒。
 
-默认端口 17003。浏览器录音需要 localhost 或 HTTPS；反向代理须支持 WebSocket Upgrade，并给长录音请求足够的上传大小和超时时间。
+### 离线部署
+
+在有网络的机器构建镜像并预下载模型，再用 `docker save`/`docker load` 迁移镜像，把整个仓库目录（含 `models/`）拷到目标机：
+
+```bash
+./scripts/prepare-models.sh                                   # 用 :gpu 镜像
+IMAGE=quantatrisk/qwen3-asr:cpu ./scripts/prepare-models.sh   # 用 :cpu 镜像
+```
+
+脚本在服务镜像内下载并校验，只挂载 `./models`，不需要 GPU；两个镜像下载的模型相同。需要镜像站时加 `HF_ENDPOINT=https://hf-mirror.com`。目标机在 `.env` 设置 `HF_HUB_OFFLINE=1`，模型缺失时启动失败而不是联网。
+
+默认端口 17003，需要改端口时直接修改 compose 的 `ports`。浏览器录音需要 localhost 或 HTTPS；反向代理须支持 WebSocket Upgrade，并给长录音请求足够的上传大小和超时时间。
 
 ## 配置
 
@@ -26,7 +33,6 @@ CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -
 
 | 参数 | 默认值 | 用途 |
 | --- | --- | --- |
-| `ASR_PORT` | `17003` | 宿主机端口 |
 | `ASR_GPU` | `0` | 宿主机 GPU 编号 |
 | `API_KEY` | 空 | 公共接口鉴权 |
 | `HF_HUB_OFFLINE` | `0` | 模型齐全后设为 `1` 禁止下载 |
@@ -38,15 +44,11 @@ CPU 对以上每条命令添加 `-f compose.cpu.yaml`，例如 `docker compose -
 
 显存比例均相对于整张显卡，需另给 Nemotron FP32 和运行时留空间。CPU 线程数按目标机器调节。
 
-应用参数通过 `.env` 传入容器；仅在宿主机 shell 中 export 不会自动传入。Compose 固定 `DEVICE`，会话数默认 GPU 4、CPU 1。需要时可在 `.env` 添加 `R2T2_MAX_SESSIONS`、`R2T2_MAX_MODEL_LEN`（16384）、`R2T2_ENFORCE_EAGER`（0）或 `R2T2_CHUNK_SECONDS`（GPU 0.16、CPU 0.64）。内部鉴权可设置 `R2T2_INTERNAL_TOKEN`。
+应用参数通过 `.env` 传入容器；仅在宿主机 shell 中 export 不会自动传入。镜像固定 `DEVICE`，会话数默认 GPU 4、CPU 1。需要时可在 `.env` 添加 `R2T2_MAX_SESSIONS`、`R2T2_MAX_MODEL_LEN`（16384）、`R2T2_ENFORCE_EAGER`（0）或 `R2T2_CHUNK_SECONDS`（GPU 0.16、CPU 0.64）。内部鉴权可设置 `R2T2_INTERNAL_TOKEN`。
 
 ## 模型与运行数据
 
-- `models/huggingface`：R2T2 和强制对齐模型缓存。
-- `models/nemotron-3-diarization`：Nemotron，正式服务只读挂载。
-- `logs`：应用日志；`.cache/vllm`：GPU 编译缓存。
-
-临时音频留在容器内。离线部署复制完整 `models/` 后，在 `.env` 设置 `HF_HUB_OFFLINE=1`；模型缺失时启动失败。
+唯一挂载 `./models:/app/models`：`models/huggingface` 存放 R2T2 与强制对齐模型，`models/nemotron-3-diarization` 存放 Nemotron。日志用 `docker compose logs`，临时音频与编译缓存留在容器内。
 
 R2T2 revision 固定为 `185ce639118ad1362d049ca0d8ed04b6ec5cd6c9`，Nemotron revision 为 `f667ed73aee57d40cc39428eb768b4fd87a0a29e`。Python 依赖由 `uv.lock` 锁定。
 
@@ -57,12 +59,11 @@ R2T2 revision 固定为 `185ce639118ad1362d049ca0d8ed04b6ec5cd6c9`，Nemotron re
 ```bash
 uv sync --frozen --extra cpu  # macOS 去掉 --extra cpu
 ./scripts/build-rust.sh
-DEVICE=cpu ./scripts/prepare-models.sh
 HF_HOME="$PWD/models/huggingface" \
 DEVICE=cpu OPENBLAS_NUM_THREADS=8 uv run --no-sync python start.py
 ```
 
-原生服务端口为 8000。使用自定义 `CARGO_TARGET_DIR` 时，另设置 `R2T2_CPU_LIBRARY_PATH` 指向构建的动态库。原生 Linux GPU 使用 `uv sync --frozen --extra cuda`；macOS 默认 CPU，Linux 默认 CUDA，不自动降级。
+原生服务端口为 8000，首次启动同样自动下载模型到 `models/`。使用自定义 `CARGO_TARGET_DIR` 时，另设置 `R2T2_CPU_LIBRARY_PATH` 指向构建的动态库。原生 Linux GPU 使用 `uv sync --frozen --extra cuda`；macOS 默认 CPU，Linux 默认 CUDA，不自动降级。
 
 ## 验证与边界
 

@@ -27,4 +27,4 @@ uv run python -m scripts.benchmark.run \
   --port 17003 --audio-file recording.wav --concurrency 1 2 4
 ```
 
-通用报告工具额外需要 `matplotlib`，不属于服务运行依赖。离线转写验收直接调用 `/v1/audio/transcriptions`，检查说话人、识别文本、时间戳及真实 GPU 资源占用。
+Nemotron CPU 性能用 `python -m scripts.benchmark.nemotron_cpu --help` 查看参数。通用报告工具额外需要 `matplotlib`，不属于服务运行依赖。离线转写验收直接调用 `/v1/audio/transcriptions`，检查说话人、识别文本、时间戳及真实 GPU 资源占用。

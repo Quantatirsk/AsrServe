@@ -190,6 +190,7 @@ def main() -> int:
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     parser = argparse.ArgumentParser()
     parser.add_argument("--healthcheck", action="store_true")
+    parser.add_argument("--download-models", action="store_true")
     args = parser.parse_args()
     if args.healthcheck:
         return (
@@ -200,6 +201,10 @@ def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s"
     )
+    from app.bootstrap import ensure_models_downloaded
+
+    if args.download_models:
+        return 0 if ensure_models_downloaded() else 1
     from app.core.config import settings
     from app.core.device import detect_device
 
@@ -213,8 +218,6 @@ def main() -> int:
         "Inference device: %s; shared offline/streaming R2T2 and independent aligner",
         device,
     )
-    from app.bootstrap import ensure_models_downloaded
-
     if not ensure_models_downloaded():
         return 1
     stop = threading.Event()

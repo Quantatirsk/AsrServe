@@ -8,21 +8,19 @@
 
 ## Docker 启动
 
-先按[部署说明](docs/deployment.md)准备模型，然后启动：
-
 ```bash
-# 默认 GPU：compose.yml
-docker compose up -d --build
+# GPU：镜像 quantatrisk/qwen3-asr:gpu，配置 compose.yml
+./build.sh
+docker compose up -d
 
-# CPU：compose.cpu.yaml
-docker compose -f compose.cpu.yaml up -d --build
+# CPU：镜像 quantatrisk/qwen3-asr:cpu，配置 compose.cpu.yml
+TARGET=cpu ./build.sh
+docker compose -f compose.cpu.yml up -d
 ```
 
-两份配置分别使用，不要叠加。镜像统一为 `quantatrisk/qwen3-asr:latest`；切换后端需要重新构建。
+Compose 只引用镜像、不含构建参数；代码更新后重新执行 `build.sh` 再 `up -d`。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
 
-默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。
-
-`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
+默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 
 ## 文件转写
 
