@@ -21,11 +21,25 @@ from app.services.asr.runtime.router import RuntimeRouter
 from app.utils.audio import NormalizedAudio
 from app.utils.audio import normalize_audio_for_asr
 
-from app.api.v1 import asr, openai_compatible
+with (
+    patch(
+        "app.services.asr.model_selection.get_offline_model_ids",
+        return_value=["confucius4-r2t2"],
+    ),
+    patch(
+        "app.services.asr.model_selection.get_default_offline_model_id",
+        return_value="confucius4-r2t2",
+    ),
+):
+    from app.api.v1 import openai_compatible
 
 
 async def request(
-    app: ASGIApp, path: str, body: bytes, content_type: str
+    app: ASGIApp,
+    path: str,
+    body: bytes,
+    content_type: str,
+    first_body: asyncio.Event | None = None,
 ) -> tuple[int, bytes]:
     messages: list[Message] = []
     scope: Scope = {
@@ -51,8 +65,12 @@ async def request(
 
     async def send(message: Message) -> None:
         messages.append(message)
+        if message["type"] == "http.response.body" and first_body is not None:
+            first_body.set()
 
     await asyncio.wait_for(app(scope, receive, send), 3)
+    assert messages[-1]["type"] == "http.response.body"
+    assert messages[-1].get("more_body", False) is False
     status = next(
         message["status"]
         for message in messages
@@ -128,14 +146,17 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 "app.services.asr.runtime.router.get_model_manager",
                 return_value=SimpleNamespace(),
             ),
+            patch(
+                "app.services.asr.offline_transcription_service.get_default_offline_model_id",
+                return_value="model",
+            ),
         ]
         for patcher in patches:
             patcher.start()
             self.addCleanup(patcher.stop)
         router = RuntimeRouter()
-        self.router = router
-        router._semaphore = asyncio.Semaphore(1)
         for patcher in [
+            patch.object(router, "resolve_model_id", return_value="confucius4-r2t2"),
             patch.object(
                 router,
                 "_get_engine",
@@ -154,63 +175,6 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         return await self.service.start_transcription(
             audio_data=b"audio", options=OfflineTranscriptionOptions(), **kwargs
         )
-
-    async def test_remote_pipeline_preserves_uniform_timestamps_and_cleans_on_error(
-        self,
-    ) -> None:
-        import requests
-        from unittest.mock import Mock
-
-        from app.services.asr.qwen3_engine import Qwen3ASREngine
-        from app.utils.audio_splitter import AudioSegment
-
-        def split(path: str, output_dir: str) -> list[AudioSegment]:
-            return [AudioSegment(0, 2000, temp_file=path, speaker_id="speaker")]
-
-        def post(url: str, **kwargs: object) -> Mock:
-            self.assertEqual(url, "http://remote.test/v1/audio/transcriptions")
-            self.assertEqual(kwargs["data"]["model"], settings.QWEN_VLLM_SERVED_MODEL)
-            upload = kwargs["files"]["file"][1]
-            self.assertTrue(Path(upload.name).exists())
-            self.assertEqual(upload.read(), b"normalized")
-            response = Mock()
-            response.json.return_value = {"text": "hello world"}
-            return response
-
-        with (
-            patch.object(settings, "QWEN_VLLM_BASE_URL", "http://remote.test"),
-            patch("app.services.asr.qwen3_remote_vllm.requests.get"),
-            patch(
-                "app.services.asr.qwen3_remote_vllm.requests.post", side_effect=post
-            ) as remote,
-            patch("app.services.asr.long_audio.get_audio_duration", return_value=2.0),
-            patch(
-                "app.utils.audio_splitter.AudioSplitter.split_audio_file",
-                side_effect=split,
-            ),
-            patch.object(self.router, "_get_engine", return_value=Qwen3ASREngine()),
-        ):
-            options = OfflineTranscriptionOptions(
-                enable_speaker_diarization=False, word_timestamps=True
-            )
-            result = await (
-                await self.service.start_transcription(
-                    audio_data=b"audio", options=options
-                )
-            )
-            self.assertEqual(result.word_timestamp_method, "uniform_fallback")
-            self.assertEqual(result.duration, 2.5)
-            self.assertEqual(result.segments[0].speaker_id, "speaker")
-            self.assertEqual(result.segments[0].word_tokens[-1].end_time, 2.5)
-            self.assert_cleaned_once()
-            remote.side_effect = requests.ConnectionError("Remote unavailable")
-            with self.assertRaisesRegex(Exception, "Remote unavailable"):
-                await (
-                    await self.service.start_transcription(
-                        audio_data=b"audio", options=options
-                    )
-                )
-            self.assert_cleaned_once()
 
     def assert_cleaned_once(self) -> None:
         self.assertEqual(sorted(self.cleaned), sorted(self.paths))
@@ -423,16 +387,10 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         app = FastAPI()
         app.include_router(openai_compatible.router)
-        app.include_router(asr.router)
-        with (
-            patch.object(
-                openai_compatible,
-                "get_offline_transcription_service",
-                return_value=self.service,
-            ),
-            patch.object(
-                asr, "get_offline_transcription_service", return_value=self.service
-            ),
+        with patch.object(
+            openai_compatible,
+            "get_offline_transcription_service",
+            return_value=self.service,
         ):
             for fmt in ("json", "verbose_json", "text", "srt", "vtt"):
                 with self.subTest(format=fmt):
@@ -456,11 +414,6 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
                         self.assertIn(b"00:00:02,500", payload)
                     if fmt == "vtt":
                         self.assertTrue(payload.startswith(b"WEBVTT"))
-            status, payload = await request(
-                app, "/stream/v1/asr", b"audio", "application/octet-stream"
-            )
-            self.assertEqual(status, 200)
-            self.assertEqual(json.loads(payload)["result"], "recognized text")
         self.assert_cleaned_once()
 
     async def test_stream_send_failure_drains_owned_task(self) -> None:
@@ -504,6 +457,59 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(outcomes[0], ClientDisconnect)
         self.assertTrue(task.cancelled())
         self.assert_cleaned_once()
+
+    async def test_json_errors_complete_before_and_after_heartbeat(self) -> None:
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(openai_compatible.router)
+        body = (
+            '--audio-test\r\nContent-Disposition: form-data; name="response_format"\r\n\r\njson'
+            '\r\n--audio-test\r\nContent-Disposition: form-data; name="file"; filename="sample.wav"'
+            "\r\nContent-Type: audio/wav\r\n\r\naudio\r\n--audio-test--\r\n"
+        ).encode()
+        self.inference_error = True
+        with patch.object(
+            openai_compatible,
+            "get_offline_transcription_service",
+            return_value=self.service,
+        ):
+            for after_heartbeat, expected_status in ((False, 500), (True, 200)):
+                with (
+                    self.subTest(after_heartbeat=after_heartbeat),
+                    patch.object(
+                        openai_compatible,
+                        "HEARTBEAT_INTERVAL_SECONDS",
+                        0.001 if after_heartbeat else 15,
+                    ),
+                ):
+                    first_body = asyncio.Event()
+                    if after_heartbeat:
+                        self.inference_release.clear()
+                    response_task = asyncio.create_task(
+                        request(
+                            app,
+                            "/v1/audio/transcriptions",
+                            body,
+                            "multipart/form-data; boundary=audio-test",
+                            first_body,
+                        )
+                    )
+                    try:
+                        if after_heartbeat:
+                            await asyncio.wait_for(first_body.wait(), 1)
+                            self.inference_release.set()
+                        status, payload = await response_task
+                    finally:
+                        self.inference_release.set()
+                        await asyncio.gather(response_task, return_exceptions=True)
+                    self.assertEqual(status, expected_status)
+                    result = json.loads(payload)
+                    self.assertEqual(result["error_code"], "DEFAULT_SERVER_ERROR")
+                    self.assertEqual(result["message"], "Inference failed")
+                    if after_heartbeat:
+                        self.assertTrue(payload.startswith(b" \n"))
+                    self.assert_cleaned_once()
 
 
 class AudioNormalizationOwnershipTests(unittest.TestCase):

@@ -1,93 +1,63 @@
-"""Model assets required by the Ascend offline deployment."""
+# -*- coding: utf-8 -*-
+"""Shared capability-to-model asset definitions."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Optional
 
 from app.core.config import settings
-
-ModelSource = Literal["modelscope", "huggingface"]
-QWEN_ASCEND_REVISION = "7278e1e70fe206f11671096ffdd38061171dd6e5"
+from app.services.realtime.protocol import MODEL_REPOSITORY, MODEL_REVISION
 
 
 @dataclass(frozen=True)
 class ModelAsset:
-    source: ModelSource
     model_id: str
     description: str
     revision: Optional[str] = None
     required_patterns: tuple[str, ...] = ()
     alternative_required_patterns: tuple[tuple[str, ...], ...] = ()
     min_total_size_bytes: int = 0
+    local_dir: str | None = None
 
 
-_OFFLINE_MODELSCOPE_ASSETS = (
-    ModelAsset(
-        source="modelscope",
-        model_id=settings.VAD_MODEL,
-        description="FSMN VAD",
-        revision="v2.0.2",
-        required_patterns=("configuration.json", "config.yaml", "model.pb"),
-        min_total_size_bytes=1_000_000,
-    ),
-    ModelAsset(
-        source="modelscope",
-        model_id="iic/speech_campplus_speaker-diarization_common",
-        description="CAM++ Diarization",
-        required_patterns=("configuration.json", "config.yaml"),
-        min_total_size_bytes=50_000_000,
-    ),
-    ModelAsset(
-        source="modelscope",
-        model_id="damo/speech_campplus_sv_zh-cn_16k-common",
-        description="CAM++ Speaker Verification",
-        required_patterns=("configuration.json", "config.yaml", "campplus_cn_common.bin"),
-        min_total_size_bytes=10_000_000,
-    ),
-    ModelAsset(
-        source="modelscope",
-        model_id="damo/speech_campplus-transformer_scl_zh-cn_16k-common",
-        description="CAM++ Change Locator",
-        required_patterns=(
-            "configuration.json",
-            "campplus_cn_encoder.pt",
-            "transformer_backend.pt",
-        ),
-        min_total_size_bytes=10_000_000,
-    ),
-)
-
-
-def get_download_modelscope_assets() -> list[ModelAsset]:
-    return list(_OFFLINE_MODELSCOPE_ASSETS)
-
-
-def get_runtime_required_modelscope_assets() -> list[ModelAsset]:
-    return list(_OFFLINE_MODELSCOPE_ASSETS)
-
-
-def get_enabled_qwen_huggingface_assets() -> list[ModelAsset]:
-    return [
+def get_huggingface_assets() -> list[ModelAsset]:
+    """Return the diarizer, shared ASR checkpoint, and timestamp aligner."""
+    assets = [
         ModelAsset(
-            source="huggingface",
-            model_id="Qwen/Qwen3-ASR-1.7B",
-            description="Qwen3-ASR-1.7B for Ascend vLLM",
-            revision=QWEN_ASCEND_REVISION,
-            required_patterns=("snapshots/*/config.json",),
+            model_id="nvidia/Nemotron-3-Diarization",
+            revision="f667ed73aee57d40cc39428eb768b4fd87a0a29e",
+            description="Nemotron Speaker Diarization",
+            required_patterns=(
+                "config.json",
+                "processor_config.json",
+                "model.safetensors",
+            ),
+            min_total_size_bytes=100_000_000,
+            local_dir=settings.NEMOTRON_MODEL_PATH,
+        ),
+        ModelAsset(
+            model_id=MODEL_REPOSITORY,
+            description="Confucius4-R2T2",
+            revision=MODEL_REVISION,
+            required_patterns=(
+                "config.json",
+                "preprocessor_config.json",
+                "tokenizer.json",
+                "tokenizer_config.json",
+            ),
             alternative_required_patterns=(
-                ("snapshots/*/model.safetensors",),
-                (
-                    "snapshots/*/model.safetensors.index.json",
-                    "snapshots/*/model-*.safetensors",
-                ),
+                ("model.safetensors",),
+                ("model.safetensors.index.json", "model-*.safetensors"),
             ),
             min_total_size_bytes=500_000_000,
-        )
+        ),
+        ModelAsset(
+            model_id="Qwen/Qwen3-ForcedAligner-0.6B",
+            description="Forced Aligner",
+            required_patterns=("config.json", "model.safetensors"),
+            min_total_size_bytes=500_000_000,
+        ),
     ]
 
-
-def get_camplusplus_replacement_paths(cache_dir: str) -> dict[str, str]:
-    return {
-        "damo/speech_campplus_sv_zh-cn_16k-common": f"{cache_dir}/damo/speech_campplus_sv_zh-cn_16k-common",
-        "damo/speech_campplus-transformer_scl_zh-cn_16k-common": f"{cache_dir}/damo/speech_campplus-transformer_scl_zh-cn_16k-common",
-        settings.VAD_MODEL: f"{cache_dir}/{settings.VAD_MODEL}",
-    }
+    return assets if settings.ALIGNMENT_MODE == "forced" else assets[:-1]

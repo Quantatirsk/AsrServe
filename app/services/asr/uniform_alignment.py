@@ -1,12 +1,10 @@
-"""Compatibility word timestamps for the Ascend offline runtime."""
+"""Estimated segment-relative word timing; no acoustic alignment."""
 
 from __future__ import annotations
 
 import unicodedata
 
-from .results import ASRFullResult, WordToken
-
-UNIFORM_FALLBACK_METHOD = "uniform_fallback"
+from .engines import WordToken
 
 
 def _is_cjk_character(character: str) -> bool:
@@ -58,28 +56,17 @@ def _alignment_units(text: str) -> list[str]:
     return units
 
 
-def apply_uniform_word_timestamps(result: ASRFullResult) -> ASRFullResult:
-    """Populate estimated word tokens inside each recognized audio segment."""
-    for segment in result.segments:
-        units = _alignment_units(segment.text)
-        duration = max(0.0, segment.end_time - segment.start_time)
-        if not units or duration == 0.0:
-            segment.word_tokens = []
-            continue
-
-        step = duration / len(units)
-        segment.word_tokens = [
-            WordToken(
-                text=unit,
-                start_time=segment.start_time + index * step,
-                end_time=(
-                    segment.end_time
-                    if index == len(units) - 1
-                    else segment.start_time + (index + 1) * step
-                ),
-            )
-            for index, unit in enumerate(units)
-        ]
-
-    result.word_timestamp_method = UNIFORM_FALLBACK_METHOD
-    return result
+def uniform_word_timestamps(text: str, duration: float) -> list[WordToken]:
+    # ponytail: pauses are distributed across words; use a validated acoustic aligner for accuracy.
+    units = _alignment_units(text)
+    if not units or duration <= 0:
+        return []
+    step = duration / len(units)
+    return [
+        WordToken(
+            unit,
+            index * step,
+            duration if index == len(units) - 1 else (index + 1) * step,
+        )
+        for index, unit in enumerate(units)
+    ]

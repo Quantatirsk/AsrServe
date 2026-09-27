@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-异步执行器模块
-
-用于将同步的模型推理调用放入线程池执行，避免阻塞事件循环，
-实现真正的多路并发处理。
-
-设计要点：
-1. 使用 ThreadPoolExecutor 而非 ProcessPoolExecutor
-   - 模型已加载在内存中，进程间无法共享
-   - GPU操作会自动释放GIL，线程池足以实现并发
-
-2. 线程池用于隔离 CPU 预处理和远程 HTTP 调用，避免阻塞事件循环。
-"""
+"""Run blocking inference while retaining resources until cancellation drains."""
 
 import os
 import asyncio
@@ -41,14 +29,13 @@ def get_executor() -> ThreadPoolExecutor:
     global _executor
     if _executor is None:
         _executor = ThreadPoolExecutor(
-            max_workers=_MAX_WORKERS,
-            thread_name_prefix="inference_worker"
+            max_workers=_MAX_WORKERS, thread_name_prefix="inference_worker"
         )
         logger.info(f"推理线程池已创建，最大工作线程数: {_MAX_WORKERS}")
     return _executor
 
 
-def shutdown_executor():
+def shutdown_executor() -> None:
     """关闭线程池执行器"""
     global _executor
     if _executor is not None:

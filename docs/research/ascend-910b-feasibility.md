@@ -1,6 +1,7 @@
 # R2T2 服务迁移 Ascend 910B：前置条件与实施路径
 
-> 更新：2026-09-27。功能基线：`dev` / `2cfb68f`；旧 Ascend 实现：`codex/ascend-910b-adaptation` / `5251d43`。
+> 后续实现：本分支已同步 dev 并完成代码接线与本地烟测，见 [部署说明](../deployment-ascend.md)。本文保留迁移前调研记录，未完成的实机验收项仍未验收。
+> 更新：2026-09-27。功能基线：`dev` / `3af1c97`；旧 Ascend 实现：`codex/ascend-910b-adaptation` / `5251d43`。
 > 本文描述待实施的迁移方案。当前没有 R2T2 服务在 910B 上的实机验证结果；CUDA/CPU 测试不能替代 NPU 验收。
 
 ## 1. 当前结论
@@ -35,7 +36,7 @@
 
 关闭对齐推理不等于当前启动时不加载 Aligner：`R2T2Engine.__init__` 仍创建对齐器。迁移若选择均分方案，必须同时调整初始化和模型完整性检查，不能只改请求开关。
 
-代码依据：[离线准备与结果组装](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/services/asr/long_audio.py)、[分段器](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/utils/audio_splitter.py)、[对齐调用条件](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/services/asr/r2t2_engine.py)。
+代码依据：[离线准备与结果组装](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/services/asr/long_audio.py)、[分段器](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/utils/audio_splitter.py)、[对齐调用条件](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/services/asr/r2t2_engine.py)。
 
 ## 3. 已有证据及其限制
 
@@ -56,7 +57,7 @@ vLLM Ascend 官方 Qwen3-ASR-1.7B 教程给出 Atlas 800I A2 64 GB 的单卡 BF1
 
 依据为 `dev` 工作区的 `docs/research/nemotron-cpu.md`、配套原始 JSON 与 `scripts/benchmark/nemotron_cpu.py`。流式数字是计算累计时间，不包含音频到达、网络、排队或多路争用；RSS 是完整测试进程峰值，不是每路内存。两机 PyTorch 版本也不同，不能只按 CPU 型号归因。
 
-这证明 CPU 路径真实可用，支持首期让 Nemotron 留在 CPU；**不证明与 FSMN 的语音边界准确率等价，也不能外推 910B 宿主的并发容量。** 目标 CPU 仍须复测噪声、音乐、低声、短促语音、重叠和长会话。
+这证明 CPU 路径真实可用，支持首期让 Nemotron 留在 CPU；**不证明切点在真实录音上的质量，也不能外推 910B 宿主的并发容量。** 目标 CPU 仍须复测噪声、音乐、低声、短促语音、重叠和长会话。
 
 ### Aligner
 
@@ -79,7 +80,7 @@ vLLM Ascend 官方 Qwen3-ASR-1.7B 教程给出 Atlas 800I A2 64 GB 的单卡 BF1
 | 私有 R2T2 服务 `127.0.0.1:8001` | Ascend 基础 Python，运行共享 R2T2 NPU 推理，保留现有私有协议 |
 | 公共 API `:8000`，默认映射 `17003` | 隔离 CPU venv，运行 API、音频处理、Nemotron 离线及实时标签；先接显式均分，真实对齐路径验收后再选择 |
 
-Nemotron 当前由 API 网关承载，**不在私有 R2T2 引擎内**。独立环境可隔离其固定 Transformers 提交与 Ascend 依赖约束，但当前 `dev` 尚未完成此接线：两个进程都使用 `sys.executable`，不能将已有双进程等同于已实现双环境。[进程启动代码](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/deploy/entrypoint.py)、[实时网关](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/services/realtime/gateway.py)
+Nemotron 当前由 API 网关承载，**不在私有 R2T2 引擎内**。独立环境可隔离其固定 Transformers 提交与 Ascend 依赖约束，但当前 `dev` 尚未完成此接线：两个进程都使用 `sys.executable`，不能将已有双进程等同于已实现双环境。[进程启动代码](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/deploy/entrypoint.py)、[实时网关](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/services/realtime/gateway.py)
 
 | 修改位置 | 待完成内容 |
 |---|---|
@@ -90,7 +91,7 @@ Nemotron 当前由 API 网关承载，**不在私有 R2T2 引擎内**。独立�
 | `app/services/asr/r2t2_engine.py`、模型资产检查 | 根据已选对齐方式初始化和检查模型；均分模式不加载未验收的 NPU Aligner |
 | Ascend Docker/启动配置 | 复用旧分支部署约束，替换旧模型服务命令和依赖；预置固定 revision 权重并检查离线启动 |
 
-共享协议常量会读取设备配置，API 内对齐器也按设备选择；因此不能只把 API 的 `DEVICE` 改为 `cpu`，就宣称所有接线完成。两进程的并发能力、配置报告与后端选择需一致。[共享协议](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/services/realtime/protocol.py)
+共享协议常量会读取设备配置，API 内对齐器也按设备选择；因此不能只把 API 的 `DEVICE` 改为 `cpu`，就宣称所有接线完成。两进程的并发能力、配置报告与后端选择需一致。[共享协议](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/services/realtime/protocol.py)
 
 ## 5. Aligner 不可用时的均分语义
 
@@ -98,7 +99,7 @@ Nemotron 当前由 API 网关承载，**不在私有 R2T2 引擎内**。独立�
 
 1. 当前 `WordToken` 是**段内相对秒数**，旧实现生成绝对时间戳；不能直接复制。对于时长 `D`、`N` 个单元，第 `i` 个区间为 `[iD/N, (i+1)D/N]`，最后终点落在段末。空文本或零时长不生成区间。
 2. 在段结果进入 `PreparedLongAudio.finish` 之前生成区间，条件保持 `word_timestamps or enable_speaker_diarization`。随后由现有链路统一偏移和缩放一次。
-3. 不改写原始转写文本，保留全部文字与 `speaker_segments`。均分会把停顿摊入词时长，可能影响文字说话人归属；不确定归属仍允许 Unknown。
+3. 不改写原始转写文本，保留全部文字与 `speaker_segments`。均分会把停顿摊入词时长，可能影响文字说话人归属；开启分离时不输出 Unknown，模糊处沿用当前说话人，因此均分误差会直接表现为归属偏移。
 4. 明确标识估算方式。旧字段为 `word_timestamp_method="uniform_fallback"`，当前结果和序列化尚未接入；应补齐对外标识或在受限协议中明确文档说明。
 5. 对齐模式是显式部署选择；已经选择真实 Aligner 后发生运行异常，不能静默改成均分。实时 `audio_ms` 仍表示处理进度，不改成词时间戳。
 
@@ -110,4 +111,4 @@ Nemotron 当前由 API 网关承载，**不在私有 R2T2 引擎内**。独立�
 4. **接入 CPU Nemotron 与对齐方案。** 对齐四种开关组合；检查仅分段模式无说话人输出且不运行对齐。验证纯静音、语音夹长静音、重叠、低声、短促语音、噪声、音乐、长音频最大段长与零重复；空活动保留音频，模型失败明确报错且清理临时文件。均分补充非零偏移、缩放、中文/英文/标点和跨说话人边界检查。
 5. **精度、容量和交付验收。** 用固定音频及人工标注评估文本、边界、说话人和时间戳；与 CUDA 结果比较但不要求跨后端逐字一致。长录音与实时并发下记录首字延迟、p95/p99、RTF、CPU/RSS/HBM、积压和错误率。验证无网启动、只读权重、重启、失败退出与健康检查。业务容量目标由实际需求确定。
 
-第 2、3 步通过后才能报告“本台 910B 上 R2T2 链路可运行”；第 4、5 步通过后才能判断完整服务的准确性、容量和部署可用性。现阶段不承诺 NPU 性能、工期或 Nemotron 与 FSMN 边界等价。
+第 2、3 步通过后才能报告“本台 910B 上 R2T2 链路可运行”；第 4、5 步通过后才能判断完整服务的准确性、容量和部署可用性。现阶段不承诺 NPU 性能、工期或 Nemotron 切点质量。

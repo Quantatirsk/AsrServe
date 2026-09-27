@@ -1,0 +1,308 @@
+"""Exercise independent chunk recognition, alignment, and speaker attribution."""
+
+from contextlib import ExitStack
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
+
+import numpy as np
+
+from app.core.config import settings
+from app.services.asr.engines import ASRFullResult, ASRSegmentResult, WordToken
+from app.services.asr.long_audio import PreparedLongAudio
+from app.services.asr.r2t2_engine import R2T2Engine
+from app.utils.audio_splitter import AudioSegment
+from app.utils.speaker_diarizer import DiarizationResult, SpeakerSegment
+
+
+class DiarizedPipelineTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.context = ExitStack()
+        self.addCleanup(self.context.close)
+        self.directory = Path(self.context.enter_context(tempfile.TemporaryDirectory()))
+        self.source = self.directory / "recording.wav"
+        self.source.touch()
+        self.engine = R2T2Engine.__new__(R2T2Engine)
+        self.engine.device = "cuda:0"
+        self.engine.model_id = "confucius4-r2t2"
+        self.engine.aligner = Mock()
+        self.engine.aligner.align_transcript.side_effect = [
+            [
+                {"text": "First", "start_ms": 0, "end_ms": 700},
+                {"text": "Yes", "start_ms": 1000, "end_ms": 1100},
+                {"text": "Mixed", "start_ms": 2000, "end_ms": 3000},
+            ],
+            [{"text": "After", "start_ms": 0, "end_ms": 1000}],
+        ]
+        self.spans = [
+            SpeakerSegment(10, 11, "speaker-1", 0.9),
+            SpeakerSegment(11, 11.1, "speaker-2", 0.9),
+            SpeakerSegment(11.1, 14, "speaker-1", 0.9),
+            SpeakerSegment(12, 13, "speaker-2", 0.9),
+        ]
+        probabilities = np.zeros((1400, 8), dtype=np.float32)
+        for span in self.spans:
+            column = 0 if span.speaker_id == "speaker-1" else 1
+            probabilities[
+                int(span.start_sec * 100) : int(span.end_sec * 100), column
+            ] = 0.9
+        self.diarization = DiarizationResult(
+            segments=self.spans,
+            probabilities=probabilities,
+            frame_seconds=0.01,
+            duration=14,
+            speaker_ids=("speaker-1", "speaker-2", None, None, None, None, None, None),
+        )
+        self.diarizer = Mock()
+        self.diarizer.diarize.return_value = self.diarization
+        self.context.enter_context(
+            patch.object(settings, "TEMP_DIR", str(self.directory))
+        )
+        self.context.enter_context(
+            patch("app.services.asr.long_audio.get_audio_duration", return_value=14)
+        )
+        self.get_diarizer = self.context.enter_context(
+            patch(
+                "app.utils.speaker_diarizer.get_speaker_diarizer",
+                return_value=self.diarizer,
+            )
+        )
+        self.splitter = self.context.enter_context(
+            patch(
+                "app.utils.audio_splitter.AudioSplitter.split_audio_file",
+                side_effect=self.split,
+            )
+        )
+        self.context.enter_context(
+            patch(
+                "app.services.asr.r2t2_engine._load_audio",
+                return_value=np.zeros(16000, dtype=np.float32),
+            )
+        )
+        self.recognize = self.context.enter_context(
+            patch(
+                "app.services.asr.r2t2_engine.transcribe_segment",
+                side_effect=["First. Yes! Mixed.", "After."],
+            )
+        )
+
+    def split(
+        self,
+        audio_path: str,
+        output_dir: str,
+        speech_segments: list[tuple[int, int]] | None = None,
+    ) -> list[AudioSegment]:
+        self.assertEqual(audio_path, str(self.source))
+        # Both label modes reuse the same unioned Nemotron activity.
+        self.assertEqual(
+            speech_segments,
+            self.diarizer.diarize.return_value.speech_intervals_ms(),
+        )
+        chunks = []
+        for index, (start, end) in enumerate(((10000, 13000), (13000, 14000))):
+            path = Path(output_dir) / f"chunk-{index}.wav"
+            path.touch()
+            chunks.append(AudioSegment(start, end, temp_file=str(path)))
+        return chunks
+
+    def transcribe(self, **kwargs: object) -> ASRFullResult:
+        return self.engine.transcribe_long_audio(str(self.source), **kwargs)
+
+    def assert_cleaned(self) -> None:
+        self.assertEqual(list(self.directory.iterdir()), [self.source])
+
+    def test_main_speaker_grouping_uses_scaled_time_before_hiding_words(self) -> None:
+        spans = [
+            SpeakerSegment(10, 13, "A", 0.9),
+            SpeakerSegment(13, 14.5, "B", 0.9),
+            SpeakerSegment(14.5, 16.5, "A", 0.9),
+        ]
+        prepared = PreparedLongAudio(
+            [
+                AudioSegment(10000, 13000),
+                AudioSegment(13000, 14500),
+                AudioSegment(14500, 16500),
+            ],
+            16.5,
+            DiarizationResult(
+                spans,
+                np.zeros((1650, 8)),
+                0.01,
+                16.5,
+                ("A", "B", None, None, None, None, None, None),
+            ),
+        )
+        results = [
+            ASRSegmentResult("First. ", 0, 3, word_tokens=[WordToken("First", 0, 3)]),
+            ASRSegmentResult(
+                "Brief. ", 0, 1.5, word_tokens=[WordToken("Brief", 0, 1.5)]
+            ),
+            ASRSegmentResult("Return.", 0, 2, word_tokens=[WordToken("Return", 0, 2)]),
+        ]
+        visible = prepared.finish(results, 1, word_timestamps=True)
+        hidden = prepared.finish(results, 1, word_timestamps=False)
+        self.assertEqual(len(visible.segments), 1)
+        self.assertEqual(len(hidden.segments), 1)
+        self.assertEqual(visible.segments[0].speaker_id, "A")
+        self.assertEqual(hidden.segments[0].text, visible.segments[0].text)
+        self.assertEqual(hidden.text, "First. \nBrief. \nReturn.")
+        self.assertIsNone(hidden.segments[0].word_tokens)
+        self.assertEqual(
+            [word.start_time for word in visible.segments[0].word_tokens], [0, 3, 4.5]
+        )
+        self.assertEqual(visible.segments[0].start_time, 10)
+        self.assertEqual(visible.segments[0].end_time, 16.5)
+        self.assertEqual(visible.speaker_segments, spans)
+        self.assertEqual(hidden.speaker_segments, spans)
+        scaled = prepared.finish(results, 2, word_timestamps=True)
+        self.assertEqual(
+            [group.speaker_id for group in scaled.segments], ["A", "B", "A"]
+        )
+        self.assertEqual(scaled.segments[1].start_time, 26)
+        self.assertEqual(scaled.segments[1].word_tokens[0].end_time, 3)
+        self.assertEqual(scaled.speaker_segments[1].start_sec, 26)
+        self.assertEqual(spans[1].start_sec, 13)
+
+    def test_overlap_does_not_duplicate_asr_and_scaled_times_preserve_short_turn(
+        self,
+    ) -> None:
+        result = self.transcribe(word_timestamps=True, timestamp_scale=2)
+        self.assertEqual(self.recognize.call_count, 2)
+        self.splitter.assert_called_once()
+        self.diarizer.diarize.assert_called_once_with(str(self.source))
+        self.assertEqual(result.text, "First. Yes! Mixed.\nAfter.")
+        self.assertEqual(
+            [segment.text for segment in result.segments],
+            ["First. ", "Yes! Mixed.", "After."],
+        )
+        self.assertEqual(
+            [segment.speaker_id for segment in result.segments],
+            ["speaker-1", "speaker-2", "speaker-1"],
+        )
+        self.assertTrue(all(s.speaker_candidates is None for s in result.segments))
+        np.testing.assert_allclose(
+            [(segment.start_time, segment.end_time) for segment in result.segments],
+            [(20, 21.4), (22, 26), (26, 28)],
+        )
+        self.assertEqual(result.duration, 28)
+        self.assertEqual(
+            [word.text for segment in result.segments for word in segment.word_tokens],
+            ["First", "Yes", "Mixed", "After"],
+        )
+        self.assertTrue(
+            all(segment.word_tokens[0].start_time == 0 for segment in result.segments)
+        )
+        self.assertAlmostEqual(result.segments[1].word_tokens[0].end_time, 0.2)
+        self.assertEqual(
+            [(span.start_sec, span.end_sec) for span in result.speaker_segments],
+            [(20, 22), (22, 22.2), (22.2, 28), (24, 26)],
+        )
+        self.assertEqual(self.spans[0].start_sec, 10)
+        self.assert_cleaned()
+
+    def test_internal_alignment_does_not_expose_unrequested_words(self) -> None:
+        result = self.transcribe(word_timestamps=False)
+        self.assertEqual(self.engine.aligner.align_transcript.call_count, 2)
+        self.assertTrue(all(segment.word_tokens is None for segment in result.segments))
+        self.assertEqual(len(result.segments), 1)
+        self.assertEqual(result.segments[0].speaker_id, "speaker-1")
+        self.assertEqual(result.segments[0].text, "First. Yes! Mixed.After.")
+        self.assertEqual(result.speaker_segments, self.spans)
+        self.assert_cleaned()
+
+    def test_disabled_labels_still_detect_activity_without_alignment(self) -> None:
+        result = self.transcribe(
+            enable_speaker_diarization=False, word_timestamps=False
+        )
+        self.diarizer.diarize.assert_called_once_with(str(self.source))
+        self.engine.aligner.align_transcript.assert_not_called()
+        self.assertEqual(len(result.segments), 2)
+        self.assertTrue(
+            all(
+                segment.speaker_id is None and segment.word_tokens is None
+                for segment in result.segments
+            )
+        )
+        self.assertIsNone(result.speaker_segments)
+        self.assert_cleaned()
+
+    def test_requested_words_still_work_without_diarization(self) -> None:
+        result = self.transcribe(enable_speaker_diarization=False, word_timestamps=True)
+        self.diarizer.diarize.assert_called_once_with(str(self.source))
+        self.assertEqual(self.engine.aligner.align_transcript.call_count, 2)
+        self.assertEqual(result.segments[0].word_tokens[1].start_time, 1)
+        self.assertEqual(result.segments[0].start_time, 10)
+        self.assertIsNone(result.speaker_segments)
+        self.assert_cleaned()
+
+    def test_empty_diarization_preserves_independent_asr(self) -> None:
+        self.diarizer.diarize.return_value = DiarizationResult(
+            [], np.zeros((1400, 8)), 0.01, 14, (None,) * 8
+        )
+        result = self.transcribe(word_timestamps=True)
+        self.assertEqual(self.recognize.call_count, 2)
+        self.assertEqual(result.text, "First. Yes! Mixed.\nAfter.")
+        self.assertTrue(
+            all(segment.speaker_id == "说话人1" for segment in result.segments)
+        )
+        self.assertEqual(result.speaker_segments, [])
+        self.assert_cleaned()
+
+    def test_empty_activity_without_labels_keeps_unpunctuated_asr_without_alignment(
+        self,
+    ) -> None:
+        self.diarizer.diarize.return_value = DiarizationResult(
+            [], np.zeros((1400, 8)), 0.01, 14, (None,) * 8
+        )
+        self.recognize.side_effect = ["quiet speech", "short"]
+        result = self.transcribe(
+            enable_speaker_diarization=False, word_timestamps=False
+        )
+        self.assertEqual(result.text, "quiet speech\nshort")
+        self.assertEqual(self.recognize.call_count, 2)
+        self.engine.aligner.align_transcript.assert_not_called()
+        self.assertIsNone(result.speaker_segments)
+        self.assertTrue(
+            all(s.speaker_id is None and s.word_tokens is None for s in result.segments)
+        )
+        self.assert_cleaned()
+
+    def test_silent_recognition_returns_empty_without_fabricated_speakers(self) -> None:
+        self.recognize.side_effect = ["", ""]
+        self.engine.aligner.align_transcript.side_effect = [[], []]
+        result = self.transcribe()
+        self.assertEqual(result.text, "")
+        self.assertEqual(result.segments, [])
+        self.assert_cleaned()
+
+    def test_recognition_or_alignment_failure_cleans_owned_chunks(self) -> None:
+        self.recognize.side_effect = RuntimeError("Recognition failed")
+        with self.assertRaisesRegex(RuntimeError, "Recognition failed"):
+            self.transcribe()
+        self.assert_cleaned()
+        self.recognize.side_effect = ["First. Yes! Mixed.", "After."]
+        self.engine.aligner.align_transcript.side_effect = RuntimeError(
+            "Alignment failed"
+        )
+        with self.assertRaisesRegex(RuntimeError, "Alignment failed"):
+            self.transcribe()
+        self.assert_cleaned()
+
+    def test_diarization_failure_does_not_start_asr_or_leave_owned_directory(
+        self,
+    ) -> None:
+        self.diarizer.diarize.side_effect = RuntimeError("Diarization failed")
+        for enabled in (True, False):
+            with (
+                self.subTest(labels=enabled),
+                self.assertRaisesRegex(RuntimeError, "Diarization failed"),
+            ):
+                self.transcribe(enable_speaker_diarization=enabled)
+        self.splitter.assert_not_called()
+        self.recognize.assert_not_called()
+        self.assert_cleaned()
+
+
+if __name__ == "__main__":
+    unittest.main()

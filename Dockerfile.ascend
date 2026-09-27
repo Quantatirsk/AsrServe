@@ -1,64 +1,44 @@
-ARG VLLM_ASCEND_IMAGE=quay.io/ascend/vllm-ascend@sha256:9008b47081282612abfe4d28069ce34436752c980fd06f7599343213205ce64d
+# v0.27.1rc1: latest versioned Ascend image checked on 2026-09-27 (release candidate).
+ARG VLLM_ASCEND_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1@sha256:4f75925e8f38e6d964768ae340c2433d08003e96fb37ceebc8cab10ec1a9ee06
+FROM ghcr.io/astral-sh/uv:0.9.22 AS uv
 FROM ${VLLM_ASCEND_IMAGE}
-
 USER root
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/root/.cache/huggingface \
-    HF_HUB_CACHE=/root/.cache/huggingface/hub \
-    HF_HUB_DISABLE_SYMLINKS_WARNING=1 \
     HF_HUB_DISABLE_PROGRESS_BARS=1 \
-    OPENBLAS_NUM_THREADS=1 \
-    OMP_NUM_THREADS=1 \
-    GOTO_NUM_THREADS=1 \
-    UV_PROJECT_ENVIRONMENT=/opt/qwen3-asr-venv \
-    QWEN3_ASR_PROJECT_ROOT=/workspace/qwen3-asr \
-    QWEN3_ASR_API_PYTHON=/opt/qwen3-asr-venv/bin/python
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        ca-certificates \
-        curl \
-        ffmpeg \
-        libopenblas-dev \
-        libsndfile1 \
-        libsox-dev \
-        sox \
-    && python3 -m pip install --no-cache-dir uv \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /workspace/qwen3-asr
-
-COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --no-install-project --frozen
-
-# 只拷贝运行所需的源码，而不是“COPY . .”，这样无关仓库产物
-# （video/、demo/、tests/、environments/、压缩包等）永远不会进入
-# 构建上下文或镜像。此清单需与 PYTHON 包保持一致。
-COPY app ./app
-COPY scripts ./scripts
-COPY start.py ./
-
-RUN chmod +x \
-        scripts/stage-qwen-model.sh \
-        scripts/start-ascend-services.sh \
-    && mkdir -p /workspace/hf_models temp data logs
-
-ENV HF_HUB_OFFLINE=0 \
-    DEVICE=cpu \
+    TOKENIZERS_PARALLELISM=false \
+    UV_PROJECT_ENVIRONMENT=/opt/api-venv \
+    API_PYTHON=/opt/api-venv/bin/python \
+    R2T2_PYTHON=/opt/ascend-python \
+    DEVICE=npu:0 \
+    ALIGNMENT_MODE=uniform \
     SPEAKER_DIARIZATION_DEVICE=cpu \
-    QWEN_ASCEND_MODEL_PATH=/workspace/hf_models/Qwen3-ASR-1.7B \
-    QWEN_VLLM_HOST=127.0.0.1 \
-    QWEN_VLLM_PORT=17004 \
-    QWEN_VLLM_SERVED_MODEL=qwen3-asr \
-    QWEN_VLLM_TIMEOUT_SEC=3600 \
-    QWEN3_ASR_API_HOST=0.0.0.0 \
-    QWEN3_ASR_API_PORT=17003
-
-EXPOSE 17003
-
-CMD ["/bin/bash"]
+    NEMOTRON_MODEL_PATH=/models/nemotron-3-diarization \
+    OMP_NUM_THREADS=4 \
+    OPENBLAS_NUM_THREADS=4 \
+    VLLM_NO_USAGE_STATS=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg libsndfile1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s "$(command -v python3)" /opt/ascend-python \
+    && python3 -m pip freeze > /tmp/ascend-constraints.txt \
+    && python3 -m pip install --no-cache-dir -c /tmp/ascend-constraints.txt \
+        python-dotenv loguru librosa soundfile websockets \
+    && python3 -m pip check
+COPY --from=uv /uv /usr/local/bin/uv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+# Never install the Nemotron Transformers pin or CPU torch into the NPU environment.
+RUN uv sync --frozen --no-dev --no-install-project --extra cpu \
+    && uv pip check --python /opt/api-venv/bin/python \
+    && /opt/api-venv/bin/python -c "from transformers import Nemotron3DiarizationForAudioFrameClassification, Nemotron3DiarizationProcessor" \
+    && /opt/ascend-python -c "import torch_npu, vllm; from vllm.transformers_utils.processors.qwen3_asr import Qwen3ASRProcessor; from vllm.v1.engine.async_llm import AsyncLLM"
+COPY app ./app
+COPY deploy ./deploy
+COPY start.py ./
+RUN mkdir -p temp logs /models
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
+    CMD ["/opt/api-venv/bin/python", "/app/start.py", "--healthcheck"]
+ENTRYPOINT ["/opt/api-venv/bin/python", "/app/start.py"]

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 音频分割模块
-基于 VAD 的智能音频分割，支持长音频分段识别
+基于 Nemotron 活动区间的音频分割，支持长音频分段识别
 """
 
 import logging
@@ -27,7 +27,6 @@ class AudioSegment:
     end_ms: int  # 结束时间（毫秒）
     audio_data: Optional[np.ndarray] = None  # 音频数据
     temp_file: Optional[str] = None  # 临时文件路径
-    speaker_id: Optional[str] = None  # 说话人ID（多说话人模式）
 
     @property
     def start_sec(self) -> float:
@@ -53,7 +52,7 @@ class AudioSegment:
 class AudioSplitter:
     """音频分割器
 
-    使用 VAD 模型检测语音边界，智能分割长音频
+    使用已有语音活动边界分割长音频，不运行检测模型
     """
 
     # 默认配置
@@ -63,13 +62,11 @@ class AudioSplitter:
     def __init__(
         self,
         min_segment_sec: float = DEFAULT_MIN_SEGMENT_SEC,
-        device: str = "auto",
     ):
         """初始化音频分割器
 
         Args:
             min_segment_sec: 每段最小时长（秒）
-            device: 计算设备（"cuda", "cpu", "auto"）
         """
         split_trigger_sec = settings.MAX_SEGMENT_SEC
 
@@ -77,80 +74,32 @@ class AudioSplitter:
         self.min_segment_sec = min_segment_sec
         self.split_trigger_ms = int(split_trigger_sec * 1000)
         self.min_segment_ms = int(min_segment_sec * 1000)
-        self.device = device
-
-    def get_vad_segments(
-        self, audio_path: str
-    ) -> List[Tuple[int, int]]:
-        """使用 VAD 模型获取语音段
-
-        Args:
-            audio_path: 音频文件路径
-
-        Returns:
-            语音段列表，每个元素为 (start_ms, end_ms)
-        """
-        try:
-            from ..services.asr.engines import get_global_vad_model
-            from ..services.asr.engines.global_models import get_vad_inference_lock
-
-            logger.info("开始 VAD 语音段检测...")
-            vad_model = get_global_vad_model(self.device)
-            if vad_model is None:
-                raise DefaultServerErrorException("VAD 模型未加载")
-
-            # 调用 VAD 模型
-            with get_vad_inference_lock():
-                result = vad_model.generate(input=audio_path, cache={})
-
-            if not result or len(result) == 0:
-                logger.warning("VAD 未检测到语音段")
-                return []
-
-            # 解析 VAD 结果
-            # FunASR VAD 返回格式: [[start_ms, end_ms], [start_ms, end_ms], ...]
-            vad_segments = result[0].get("value", [])
-
-            if not vad_segments:
-                logger.warning("VAD 结果为空")
-                return []
-
-            logger.info(f"VAD 检测到 {len(vad_segments)} 个语音段")
-            logger.info(
-                "开始按 VAD 边界重分段 "
-                f"(split_trigger={self.split_trigger_sec}s, min_segment={self.min_segment_sec}s)..."
-            )
-            return [(int(seg[0]), int(seg[1])) for seg in vad_segments]
-
-        except Exception as e:
-            logger.error(f"VAD 检测失败: {e}")
-            raise DefaultServerErrorException(f"VAD 检测失败: {str(e)}")
 
     def merge_segments_greedy(
-        self, vad_segments: List[Tuple[int, int]], total_duration_ms: int
+        self, speech_segments: List[Tuple[int, int]], total_duration_ms: int
     ) -> List[Tuple[int, int]]:
-        """按 VAD 结果重分段
+        """按语音活动区间重分段
 
         策略：
-        1. 默认保留 VAD 原始边界，避免将整段连续语音合并成超长片段
+        1. 默认保留 语音活动原始边界，避免将整段连续语音合并成超长片段
         2. 仅对短片段（< min_segment_ms）做邻段合并
         3. 对重叠片段进行边界修正，避免重复音频
 
         Args:
-            vad_segments: VAD 检测到的语音段列表 [(start_ms, end_ms), ...]
+            speech_segments: 已检测到的语音段列表 [(start_ms, end_ms), ...]
             total_duration_ms: 音频总时长（毫秒）
 
         Returns:
             合并后的段列表 [(start_ms, end_ms), ...]
         """
-        if not vad_segments:
-            # 没有 VAD 段，返回整个音频（按最大时长切分）
+        if not speech_segments:
+            # 未检测到活动不等于静音；保留整个音频交给 ASR（按最大时长切分）
             return self._split_by_fixed_duration(total_duration_ms)
 
         # 按时间排序并修正边界（防止越界、重叠）
-        sorted_vad = sorted(vad_segments, key=lambda x: x[0])
+        sorted_intervals = sorted(speech_segments, key=lambda x: x[0])
         normalized: List[Tuple[int, int]] = []
-        for raw_start, raw_end in sorted_vad:
+        for raw_start, raw_end in sorted_intervals:
             start_ms = max(0, int(raw_start))
             end_ms = min(total_duration_ms, int(raw_end))
             if end_ms <= start_ms:
@@ -212,10 +161,14 @@ class AudioSplitter:
                 merged[idx + 1] = (start_ms, next_end)
                 del merged[idx]
 
-        return merged
+        return [
+            (start_ms + start, start_ms + end)
+            for start_ms, end_ms in merged
+            for start, end in self._split_by_fixed_duration(end_ms - start_ms)
+        ]
 
     def _split_by_fixed_duration(self, total_duration_ms: int) -> List[Tuple[int, int]]:
-        """按固定时长切分（无 VAD 时的 fallback）
+        """按固定时长切分（无活动区间时保留音频的兜底）
 
         Args:
             total_duration_ms: 音频总时长（毫秒）
@@ -223,12 +176,19 @@ class AudioSplitter:
         Returns:
             切分后的段列表
         """
+        if self.split_trigger_ms < 1:
+            raise ValueError(
+                "Maximum segment duration must be at least one millisecond"
+            )
         segments = []
         current = 0
+        min_tail_ms = min(self.min_segment_ms, self.split_trigger_ms)
         while current < total_duration_ms:
             end = min(current + self.split_trigger_ms, total_duration_ms)
-            if end - current >= self.min_segment_ms:
-                segments.append((current, end))
+            remaining = total_duration_ms - end
+            if 0 < remaining < min_tail_ms:
+                end = total_duration_ms - min_tail_ms
+            segments.append((current, end))
             current = end
         return segments
 
@@ -236,12 +196,16 @@ class AudioSplitter:
         self,
         audio_path: str,
         output_dir: Optional[str] = None,
+        *,
+        speech_segments: List[Tuple[int, int]],
     ) -> List[AudioSegment]:
         """分割音频文件
 
         Args:
             audio_path: 音频文件路径
             output_dir: 输出目录（可选，默认使用临时目录）
+            speech_segments: 已知语音区间 [(start_ms, end_ms), ...]。给出时直接
+                复用；空列表仍按固定时长分割以保留识别兜底
 
         Returns:
             音频片段列表
@@ -249,12 +213,12 @@ class AudioSplitter:
         try:
             # 加载音频
             audio_data, sr = librosa.load(audio_path, sr=self.DEFAULT_SAMPLE_RATE)
-            total_duration_ms = int(len(audio_data) / sr * 1000)
+            total_duration_ms = (len(audio_data) * 1000 + int(sr) - 1) // int(sr)
 
             logger.info(f"音频总时长: {total_duration_ms / 1000:.2f}秒")
 
             # 检查是否需要分割
-            if total_duration_ms <= self.split_trigger_ms:
+            if len(audio_data) * 1000 <= self.split_trigger_ms * int(sr):
                 logger.info("音频时长在限制内，无需分割")
                 return [
                     AudioSegment(
@@ -265,12 +229,14 @@ class AudioSplitter:
                     )
                 ]
 
-            # 获取 VAD 段
-            vad_segments = self.get_vad_segments(audio_path)
-
-            # 贪婪合并
-            merged_segments = self.merge_segments_greedy(vad_segments, total_duration_ms)
-            logger.info(f"重分段完成: 原始VAD={len(vad_segments)}, 输出={len(merged_segments)}")
+            merged_segments = self.merge_segments_greedy(
+                speech_segments, total_duration_ms
+            )
+            logger.info(
+                "重分段完成: 来源=Nemotron, 原始语音区间=%d, 输出=%d",
+                len(speech_segments),
+                len(merged_segments),
+            )
 
             # 切分音频并保存到临时文件
             logger.info("开始切分音频并保存临时文件...")
@@ -280,8 +246,8 @@ class AudioSplitter:
             audio_segments = []
             for idx, (start_ms, end_ms) in enumerate(merged_segments):
                 # 计算采样点范围
-                start_sample = int(start_ms / 1000 * sr)
-                end_sample = int(end_ms / 1000 * sr)
+                start_sample = start_ms * int(sr) // 1000
+                end_sample = end_ms * int(sr) // 1000
 
                 # 提取音频片段
                 segment_data = audio_data[start_sample:end_sample]
@@ -318,34 +284,3 @@ class AudioSplitter:
         except Exception as e:
             logger.error(f"音频分割失败: {e}")
             raise DefaultServerErrorException(f"音频分割失败: {str(e)}")
-
-    @staticmethod
-    def cleanup_segments(segments: List[AudioSegment]) -> None:
-        """清理临时文件
-
-        Args:
-            segments: 音频片段列表
-        """
-        for segment in segments:
-            if segment.temp_file and os.path.exists(segment.temp_file):
-                try:
-                    os.remove(segment.temp_file)
-                except Exception as e:
-                    logger.warning(f"清理临时文件失败: {segment.temp_file}, {e}")
-
-
-def split_long_audio(
-    audio_path: str,
-    device: str = "auto",
-) -> List[AudioSegment]:
-    """分割长音频的便捷函数
-
-    Args:
-        audio_path: 音频文件路径
-        device: 计算设备
-
-    Returns:
-        音频片段列表
-    """
-    splitter = AudioSplitter(device=device)
-    return splitter.split_audio_file(audio_path)

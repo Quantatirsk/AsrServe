@@ -1,13 +1,13 @@
-"""Startup integrity checks and preload for the Ascend offline stack."""
-
-from __future__ import annotations
+# -*- coding: utf-8 -*-
+"""
+模型预加载工具
+在应用启动时预加载所有需要的模型,避免首次请求时的延迟
+"""
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-from .boot_events import emit_boot_event
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ class ModelIntegritySpec:
     required_patterns: tuple[str, ...]
     alternative_required_patterns: tuple[tuple[str, ...], ...] = ()
     min_total_size_bytes: int = 0
+    expected_revision: str | None = None
 
 
 def _find_pattern_matches(root: Path, pattern: str) -> list[Path]:
@@ -29,60 +30,128 @@ def _find_missing_patterns(root: Path, patterns: tuple[str, ...]) -> list[str]:
     return [pattern for pattern in patterns if not _find_pattern_matches(root, pattern)]
 
 
-def _format_alternative_patterns(groups: tuple[tuple[str, ...], ...]) -> str:
-    return " OR ".join(" + ".join(group) for group in groups)
+def _format_alternative_patterns(pattern_groups: tuple[tuple[str, ...], ...]) -> str:
+    return " OR ".join(" + ".join(group) for group in pattern_groups)
 
 
 def _check_model_integrity_spec(spec: ModelIntegritySpec) -> dict[str, Any]:
-    if not spec.path.is_dir():
+    if not spec.path.exists() or not spec.path.is_dir():
         return {
             "description": spec.description,
             "path": str(spec.path),
             "ok": False,
-            "missing_patterns": list(spec.required_patterns),
+            "missing_patterns": [
+                *spec.required_patterns,
+                *(
+                    [_format_alternative_patterns(spec.alternative_required_patterns)]
+                    if spec.alternative_required_patterns
+                    else []
+                ),
+            ],
             "total_size_bytes": 0,
             "reason": "directory_missing",
         }
 
     files = [path for path in spec.path.rglob("*") if path.is_file()]
-    total_size = sum(path.stat().st_size for path in files)
-    missing = _find_missing_patterns(spec.path, spec.required_patterns)
-    if not missing and spec.alternative_required_patterns:
-        if not any(
-            not _find_missing_patterns(spec.path, group)
-            for group in spec.alternative_required_patterns
-        ):
-            missing = [_format_alternative_patterns(spec.alternative_required_patterns)]
+    total_size_bytes = sum(path.stat().st_size for path in files)
 
-    reason = "ok"
-    if missing:
-        reason = "required_files_missing"
-    elif total_size < spec.min_total_size_bytes:
-        reason = "directory_too_small"
+    missing_patterns = _find_missing_patterns(spec.path, spec.required_patterns)
+    if not missing_patterns and spec.alternative_required_patterns:
+        alternative_missing_patterns = [
+            _find_missing_patterns(spec.path, group)
+            for group in spec.alternative_required_patterns
+        ]
+        if all(alternative_missing_patterns):
+            missing_patterns = [
+                _format_alternative_patterns(spec.alternative_required_patterns)
+            ]
+
+    for index_path in spec.path.glob("model.safetensors.index.json"):
+        import json
+
+        try:
+            weights = json.loads(index_path.read_text())["weight_map"]
+            if not isinstance(weights, dict) or not weights:
+                raise ValueError("Empty weight map")
+            for name in set(weights.values()):
+                weight = index_path.parent / name
+                if not weight.is_file() or not weight.stat().st_size:
+                    missing_patterns.append(name)
+        except (OSError, ValueError, KeyError, TypeError):
+            missing_patterns.append("valid model.safetensors.index.json")
+
+    if spec.expected_revision:
+        for name in spec.required_patterns:
+            metadata = spec.path / ".cache/huggingface/download" / (name + ".metadata")
+            if not metadata.is_file() or metadata.read_text().splitlines()[:1] != [
+                spec.expected_revision
+            ]:
+                missing_patterns.append(
+                    f"{name}: expected revision {spec.expected_revision}"
+                )
+
+    if missing_patterns:
+        return {
+            "description": spec.description,
+            "path": str(spec.path),
+            "ok": False,
+            "missing_patterns": missing_patterns,
+            "total_size_bytes": total_size_bytes,
+            "reason": "required_files_missing",
+        }
+
+    if total_size_bytes < spec.min_total_size_bytes:
+        return {
+            "description": spec.description,
+            "path": str(spec.path),
+            "ok": False,
+            "missing_patterns": [],
+            "total_size_bytes": total_size_bytes,
+            "reason": "directory_too_small",
+        }
+
     return {
         "description": spec.description,
         "path": str(spec.path),
-        "ok": reason == "ok",
-        "missing_patterns": missing,
-        "total_size_bytes": total_size,
-        "reason": reason,
+        "ok": True,
+        "missing_patterns": [],
+        "total_size_bytes": total_size_bytes,
+        "reason": "ok",
     }
 
 
 def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
-    from app.core.config import settings
-    from app.services.asr.model_capabilities import get_runtime_required_modelscope_assets
+    from app.infrastructure import (
+        get_huggingface_model_cache_dir,
+        find_huggingface_snapshot_dir,
+    )
+    from app.services.asr.model_capabilities import (
+        get_huggingface_assets,
+    )
 
-    return [
-        ModelIntegritySpec(
-            description=asset.description,
-            path=Path(settings.MODELSCOPE_PATH) / asset.model_id,
-            required_patterns=asset.required_patterns,
-            alternative_required_patterns=asset.alternative_required_patterns,
-            min_total_size_bytes=asset.min_total_size_bytes,
+    specs = []
+    for asset in get_huggingface_assets():
+        cache = get_huggingface_model_cache_dir(asset.model_id)
+        snapshot = (
+            Path(asset.local_dir)
+            if asset.local_dir
+            else (
+                cache / "snapshots" / asset.revision
+                if asset.revision
+                else find_huggingface_snapshot_dir(asset.model_id)
+            )
         )
-        for asset in get_runtime_required_modelscope_assets()
-    ]
+        specs.append(
+            ModelIntegritySpec(
+                description=asset.description,
+                path=snapshot or cache / "snapshots" / "missing",
+                required_patterns=asset.required_patterns,
+                alternative_required_patterns=asset.alternative_required_patterns,
+                min_total_size_bytes=asset.min_total_size_bytes,
+                expected_revision=asset.revision if asset.local_dir else None,
+            )
+        )
+    return specs
 
 
 def verify_required_models_integrity(use_logger: bool = True) -> dict[str, Any]:
@@ -91,49 +160,27 @@ def verify_required_models_integrity(use_logger: bool = True) -> dict[str, Any]:
         for spec in _build_required_model_integrity_specs()
     ]
     invalid = [result for result in results if not result["ok"]]
-    if use_logger:
-        logger.info(
-            "model integrity: total=%s ok=%s failed=%s",
-            len(results),
-            len(results) - len(invalid),
-            len(invalid),
-        )
-    else:
-        print(
-            f"model integrity: total={len(results)} "
-            f"ok={len(results) - len(invalid)} failed={len(invalid)}"
-        )
+    for result in results:
+        message = f"Model integrity: {result['description']} {result['reason']} {result['path']}"
+        if use_logger:
+            logger.log(logging.INFO if result["ok"] else logging.ERROR, message)
+        else:
+            print(message)
     return {"total": len(results), "results": results, "invalid_models": invalid}
 
 
 def preload_models() -> dict[str, Any]:
-    from app.core.config import settings
-    from app.services.asr.engines import get_global_vad_model
-    from app.services.asr.manager import ASCEND_MODEL_ID
+    """Load every required component; startup must not silently degrade."""
     from app.services.asr.runtime import get_runtime_router
-    from app.utils.download_models import fix_camplusplus_config
-    from app.utils.speaker_diarizer import get_global_diarization_pipeline
+    from app.services.realtime.protocol import MODEL_ID
+    from app.services.realtime.client import get_engine_capabilities
+    from app.utils.speaker_diarizer import get_speaker_diarizer
 
-    fix_camplusplus_config()
-    result: dict[str, Any] = {
-        "asr_models": {ASCEND_MODEL_ID: {"loaded": False, "error": None}},
-        "vad_model": {"loaded": False, "error": None},
-        "speaker_diarization_model": {"loaded": False, "error": None},
+    if not get_engine_capabilities().get("ready"):
+        raise RuntimeError("Shared R2T2 engine is not ready")
+    get_runtime_router().warmup_model(MODEL_ID)
+    get_speaker_diarizer().warmup()
+    return {
+        "asr_models": {MODEL_ID: {"loaded": True}},
+        "speaker_diarization_model": {"loaded": True},
     }
-    steps = (
-        ("asr_models", lambda: get_runtime_router().warmup_model(ASCEND_MODEL_ID)),
-        ("vad_model", lambda: get_global_vad_model(settings.DEVICE)),
-        ("speaker_diarization_model", get_global_diarization_pipeline),
-    )
-    for key, loader in steps:
-        emit_boot_event("step_start", phase="preload", message=key)
-        try:
-            loader()
-            target = result[key][ASCEND_MODEL_ID] if key == "asr_models" else result[key]
-            target["loaded"] = True
-        except Exception as exc:
-            target = result[key][ASCEND_MODEL_ID] if key == "asr_models" else result[key]
-            target["error"] = str(exc)
-            logger.error("preload failed for %s: %s", key, exc)
-        emit_boot_event("step_done", phase="preload", message=key)
-    return result

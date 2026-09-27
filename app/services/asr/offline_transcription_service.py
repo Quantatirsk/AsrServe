@@ -5,18 +5,14 @@ from __future__ import annotations
 import asyncio
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from app.core.executor import run_sync
-from app.core.exceptions import InvalidParameterException
-from app.services.asr.results import ASRFullResult
-from app.services.asr.manager import ASCEND_MODEL_ID
-from app.services.asr.uniform_alignment import apply_uniform_word_timestamps
+from app.services.asr.engines import ASRFullResult
+from app.services.asr.model_selection import get_default_offline_model_id
 from app.services.asr.long_audio import OfflineASRRequest
 from app.services.asr.runtime import get_runtime_router
-
-if TYPE_CHECKING:
-    from app.services.audio.audio_service import AudioProcessingService
+from app.services.audio import get_audio_service
 
 
 @dataclass(frozen=True)
@@ -32,14 +28,7 @@ class OfflineTranscriptionService:
     """Prepare audio before returning a task that owns its files until completion."""
 
     def __init__(self) -> None:
-        self._audio_service: Optional[AudioProcessingService] = None
-
-    def _get_audio_service(self) -> AudioProcessingService:
-        if self._audio_service is None:
-            from app.services.audio import get_audio_service
-
-            self._audio_service = get_audio_service()
-        return self._audio_service
+        self._audio_service = get_audio_service()
 
     async def start_transcription(
         self,
@@ -49,16 +38,12 @@ class OfflineTranscriptionService:
         filename: Optional[str] = None,
         audio_address: Optional[str] = None,
     ) -> asyncio.Task[ASRFullResult]:
-        if options.hotwords.strip():
-            raise InvalidParameterException(
-                "vocabulary_id is not supported by the Ascend offline runtime"
-            )
         resources = ExitStack()
         try:
             # Register ownership in the worker before returning across a cancellation point.
             audio = await run_sync(
                 resources.enter_context,
-                self._get_audio_service().prepare(
+                self._audio_service.prepare(
                     audio_data=audio_data,
                     audio_address=audio_address,
                     filename=filename,
@@ -67,22 +52,16 @@ class OfflineTranscriptionService:
                 ),
             )
             request = OfflineASRRequest(
-                model_id=ASCEND_MODEL_ID,
+                model_id=get_default_offline_model_id(),
                 audio_path=audio.normalized_path,
-                enable_itn=True,
+                hotwords=options.hotwords,
                 sample_rate=options.sample_rate,
                 enable_speaker_diarization=options.enable_speaker_diarization,
+                word_timestamps=options.word_timestamps,
                 timestamp_scale=audio.timestamp_scale,
                 task_id=options.task_id,
             )
-
-            async def transcribe() -> ASRFullResult:
-                result = await get_runtime_router().run_offline(request)
-                if options.word_timestamps:
-                    apply_uniform_word_timestamps(result)
-                return result
-
-            task = asyncio.create_task(transcribe())
+            task = asyncio.create_task(get_runtime_router().run_offline(request))
         except BaseException:
             resources.close()
             raise

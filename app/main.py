@@ -10,18 +10,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi_offline import FastAPIOffline
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 
 from .core.config import settings
+from .services.asr.runtime import get_runtime_router
 from .core.exceptions import (
     APIException,
     api_exception_handler,
     general_exception_handler,
 )
-from .core.logging import setup_logging, get_worker_id
+from .core.logging import setup_logging
 from .core.executor import shutdown_executor
 from .api.v1 import api_router
-from .utils.boot_events import emit_boot_event
 
 # 忽略 Pydantic V2 兼容性警告
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2")
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 def cleanup_temp_directory():
     """清理临时目录中的旧文件"""
     import time
+
     temp_dir = settings.TEMP_DIR
     if not os.path.exists(temp_dir):
         return
@@ -63,54 +64,24 @@ def cleanup_temp_directory():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    workers = int(os.getenv("WORKERS", "1"))
-    worker_id = get_worker_id()
+    """Require every offline component before accepting traffic."""
+    from .utils.model_loader import preload_models, verify_required_models_integrity
 
-    # 启动时
-    logger.info(f"Worker [{worker_id}] 启动中...")
-    emit_boot_event("phase_start", phase="worker", total=1, message=f"Worker [{worker_id}] 启动中")
+    cleanup_temp_directory()
+    integrity = verify_required_models_integrity()
+    if integrity["invalid_models"]:
+        raise RuntimeError("Required model integrity check failed")
+    preload_models()
+    logger.info("Shared R2T2 and Nemotron ready; alignment=%s", settings.ALIGNMENT_MODE)
+    try:
+        yield
+    finally:
+        shutdown_executor()
 
-    # 清理旧的临时文件（仅主 Worker 执行）
-    if worker_id == 0:
-        cleanup_temp_directory()
+        get_runtime_router().close()
+        from .utils.speaker_diarizer import close_speaker_diarizer
 
-    from .utils.model_loader import (
-        preload_models,
-        verify_required_models_integrity,
-    )
-
-    integrity_result = verify_required_models_integrity()
-    if integrity_result["invalid_models"]:
-        emit_boot_event("error", phase="integrity", message="required model integrity check failed")
-        raise RuntimeError("required model integrity check failed")
-
-    logger.info(f"Worker [{worker_id}] 正在加载模型...")
-    preload_result = preload_models()
-
-    asr_results = preload_result.get("asr_models", {})
-    loaded_count = sum(1 for r in asr_results.values() if r.get("loaded"))
-    total_count = len(asr_results)
-    logger.info(f"Worker [{worker_id}] 模型加载完成: {loaded_count}/{total_count}")
-    failed_asr_models = {
-        model_id: status.get("error")
-        for model_id, status in asr_results.items()
-        if not status.get("loaded") and status.get("error")
-    }
-    if failed_asr_models:
-        logger.error(f"Worker [{worker_id}] ASR模型预加载失败详情: {failed_asr_models}")
-        emit_boot_event("error", phase="preload", message=f"ASR模型预加载失败详情: {failed_asr_models}")
-        raise RuntimeError(f"ASR model preload failed: {failed_asr_models}")
-
-    logger.info(f"Worker [{worker_id}] 已就绪")
-    emit_boot_event("ready", phase="worker", message=f"Worker [{worker_id}] 已就绪")
-
-    yield
-
-    # 关闭时
-    logger.info(f"Worker [{worker_id}] 正在关闭推理线程池...")
-    shutdown_executor()
-    logger.info(f"Worker [{worker_id}] 已关闭")
+        close_speaker_diarizer()
 
 
 def create_app() -> FastAPI:
@@ -141,31 +112,13 @@ def create_app() -> FastAPI:
     app.add_exception_handler(APIException, api_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)
 
-    # 注册静态文件服务（用于临时文件）
-    app.mount("/tmp", StaticFiles(directory=settings.TEMP_DIR), name="temp_files")
-
     # 注册API路由
     app.include_router(api_router)
 
     # 根路径
-    @app.get("/", summary="根路径", description="API服务根路径")
+    @app.get("/", include_in_schema=False)
     async def root():
-        return {
-            "message": settings.APP_NAME,
-            "version": settings.APP_VERSION,
-            "description": settings.APP_DESCRIPTION,
-            "endpoints": {
-                # 阿里云兼容 API
-                "asr": "/stream/v1/asr",
-                "asr_models": "/stream/v1/asr/models",
-                "asr_health": "/stream/v1/asr/health",
-                # OpenAI 兼容 API
-                "openai_models": "/v1/models",
-                "openai_transcriptions": "/v1/audio/transcriptions",
-                # 文档
-                "docs": settings.docs_url or "禁用",
-            },
-        }
+        return RedirectResponse("realtime")
 
     return app
 

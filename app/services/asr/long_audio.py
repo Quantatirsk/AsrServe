@@ -1,4 +1,4 @@
-"""Long audio preparation, assembly, and file ownership."""
+"""Diarized audio preparation, result assembly, and temporary file ownership."""
 
 from __future__ import annotations
 
@@ -6,70 +6,101 @@ import logging
 import tempfile
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Optional, Sequence
 
 from app.core.config import settings
 from app.core.logging import log_inference_metrics
-from app.services.asr.results import ASRFullResult, ASRSegmentResult
+from app.services.asr.engines.base import ASRFullResult, ASRSegmentResult
 from app.utils.audio import get_audio_duration
 
 if TYPE_CHECKING:
     from app.utils.audio_splitter import AudioSegment
-    from app.utils.speaker_diarizer import SpeakerSegment
+    from app.utils.speaker_diarizer import DiarizationResult
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass
 class OfflineASRRequest:
     model_id: str
     audio_path: str
-    enable_itn: bool = True
+    hotwords: str = ""
     sample_rate: int = 16000
     enable_speaker_diarization: bool = True
+    word_timestamps: bool = False
     timestamp_scale: float = 1.0
     task_id: Optional[str] = None
 
 
 @dataclass
 class PreparedLongAudio:
-    segments: Sequence[AudioSegment | SpeakerSegment]
+    segments: Sequence[AudioSegment]
     duration: float
+    diarization: DiarizationResult | None = None
 
     def finish(
-        self, results: Sequence[ASRSegmentResult], timestamp_scale: float
+        self,
+        results: Sequence[ASRSegmentResult],
+        timestamp_scale: float,
+        *,
+        word_timestamps: bool = True,
     ) -> ASRFullResult:
-        output = []
-        for segment, result in zip(self.segments, results, strict=True):
-            if not result.text:
-                continue
-            words = result.word_tokens
-            if words and timestamp_scale != 1.0:
-                for word in words:
-                    word.start_time *= timestamp_scale
-                    word.end_time *= timestamp_scale
-            output.append(
-                ASRSegmentResult(
-                    text=result.text,
-                    start_time=segment.start_sec * timestamp_scale,
-                    end_time=segment.end_sec * timestamp_scale,
-                    speaker_id=segment.speaker_id,
-                    word_tokens=words,
-                )
+        from .speaker_attribution import assign_speakers, consolidate_speaker_turns
+
+        absolute = [
+            replace(result, start_time=segment.start_sec, end_time=segment.end_sec)
+            for segment, result in zip(self.segments, results, strict=True)
+            if result.text
+        ]
+        groups = (
+            assign_speakers(absolute, self.diarization)
+            if self.diarization is not None
+            else absolute
+        )
+        output = [
+            replace(
+                group,
+                start_time=group.start_time * timestamp_scale,
+                end_time=group.end_time * timestamp_scale,
+                word_tokens=[
+                    replace(
+                        word,
+                        start_time=word.start_time * timestamp_scale,
+                        end_time=word.end_time * timestamp_scale,
+                    )
+                    for word in group.word_tokens
+                ]
+                if group.word_tokens
+                else None,
             )
+            for group in groups
+        ]
+        speaker_segments = None
+        if self.diarization is not None:
+            output = consolidate_speaker_turns(output)
+            speaker_segments = [
+                replace(
+                    span,
+                    start_sec=span.start_sec * timestamp_scale,
+                    end_sec=span.end_sec * timestamp_scale,
+                )
+                for span in self.diarization.segments
+            ]
+        if not word_timestamps:
+            output = [replace(group, word_tokens=None) for group in output]
         return ASRFullResult(
-            text="\n".join(item.text for item in output),
+            text="\n".join(result.text for result in results if result.text),
             segments=output,
             duration=self.duration * timestamp_scale,
+            speaker_segments=speaker_segments,
         )
 
 
 @contextmanager
 def prepare_long_audio(
     audio_path: str,
-    device: str,
     enable_speaker_diarization: bool,
     model_id: str,
     task_id: str | None = None,
@@ -86,20 +117,22 @@ def prepare_long_audio(
         with tempfile.TemporaryDirectory(
             prefix="asr-segments-", dir=settings.TEMP_DIR
         ) as directory:
-            segments: Sequence[AudioSegment | SpeakerSegment] = []
-            if enable_speaker_diarization:
-                from app.utils.speaker_diarizer import SpeakerDiarizer
+            from app.utils.speaker_diarizer import get_speaker_diarizer
 
-                segments = SpeakerDiarizer().split_audio_by_speakers(
-                    audio_path, output_dir=directory
+            # Detection is shared by both modes; the flag only controls labels.
+            activity = get_speaker_diarizer().diarize(audio_path)
+            if not activity.segments:
+                logger.info(
+                    "Nemotron detected no activity; retaining audio for ASR fallback"
                 )
-            if not segments:
-                segments = AudioSplitter(device=device).split_audio_file(
-                    audio_path, output_dir=directory
-                )
-            if not segments:
-                raise ValueError("Audio preparation produced no segments")
-            yield PreparedLongAudio(segments, duration)
+            segments = AudioSplitter().split_audio_file(
+                audio_path,
+                output_dir=directory,
+                speech_segments=activity.speech_intervals_ms(),
+            )
+            yield PreparedLongAudio(
+                segments, duration, activity if enable_speaker_diarization else None
+            )
             status = "success"
     finally:
         log_inference_metrics(

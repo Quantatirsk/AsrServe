@@ -1,85 +1,114 @@
-"""Concurrency boundary for the single remote Ascend ASR engine."""
+"""One serialized offline pipeline with cancellation-safe ownership."""
 
 from __future__ import annotations
 
 import asyncio
 import threading
-from typing import TYPE_CHECKING, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+import torch
 
 from app.core.executor import run_sync
+from app.services.asr.engines import ASRFullResult
 from app.services.asr.long_audio import OfflineASRRequest
-from app.services.asr.results import ASRFullResult
-from app.services.asr.manager import ASCEND_MODEL_ID, get_model_manager
+from app.services.asr.manager import get_model_manager
 
 if TYPE_CHECKING:
-    from app.services.asr.engines import BaseASREngine
-
-_REMOTE_CONCURRENCY = 8
+    from app.services.asr.r2t2_engine import R2T2Engine
 
 
 class RuntimeEngineLease:
-    def __init__(self, engine: BaseASREngine, semaphore: asyncio.Semaphore) -> None:
+    def __init__(self, engine: R2T2Engine, release: Callable[[], None]) -> None:
         self.engine = engine
-        self._semaphore = semaphore
+        self._release = release
+        self._closed = False
 
-    async def __aenter__(self) -> BaseASREngine:
+    async def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._release()
+
+    async def __aenter__(self) -> R2T2Engine:
         return self.engine
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
-        self._semaphore.release()
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+        await self.close()
 
 
 class RuntimeRouter:
-    """Own one stateless remote adapter and bound request concurrency."""
-
     def __init__(self) -> None:
         self._manager = get_model_manager()
-        self._engine: Optional[BaseASREngine] = None
-        self._engine_lock = threading.Lock()
-        self._semaphore = asyncio.Semaphore(_REMOTE_CONCURRENCY)
+        self._engine: R2T2Engine | None = None
+        self._init_lock = threading.Lock()
+        # The synchronous forced aligner cannot overlap calls.
+        self._inference_lock = asyncio.Lock()
 
-    def resolve_model_id(self, model_id: Optional[str]) -> str:
+    def resolve_model_id(self, model_id: str | None) -> str:
         return self._manager.get_declared_entry_config(model_id).model_id
 
-    def _get_engine(self, model_id: Optional[str] = None) -> BaseASREngine:
-        self.resolve_model_id(model_id)
-        if self._engine is None:
-            with self._engine_lock:
-                if self._engine is None:
-                    self._engine = self._manager.create_engine(ASCEND_MODEL_ID)
-        return self._engine
+    def _get_engine(self, model_id: str) -> R2T2Engine:
+        with self._init_lock:
+            if self._engine is None:
+                self._engine = self._manager.create_engine(model_id)
+            return self._engine
 
-    def warmup_model(self, model_id: Optional[str] = None) -> None:
-        self._get_engine(model_id)
+    def warmup_model(self, model_id: str | None = None) -> None:
+        self._get_engine(self.resolve_model_id(model_id))
+
+    def close(self) -> None:
+        if self._engine is not None:
+            self._engine.close()
+            self._engine = None
 
     def get_loaded_model_ids(self) -> list[str]:
-        return [ASCEND_MODEL_ID] if self._engine is not None else []
+        return [self._engine.model_id] if self._engine is not None else []
 
     def get_memory_usage(self) -> dict[str, object]:
-        loaded = self.get_loaded_model_ids()
-        return {"model_list": loaded, "loaded_count": len(loaded), "gpu_memory": None}
+        models = self.get_loaded_model_ids()
+        memory: dict[str, object] = {
+            "model_list": models,
+            "loaded_count": len(models),
+        }
+        from app.core.config import settings
 
-    async def acquire_engine(
-        self, model_id: Optional[str] = None
-    ) -> RuntimeEngineLease:
-        engine = await run_sync(self._get_engine, model_id)
-        await self._semaphore.acquire()
-        return RuntimeEngineLease(engine, self._semaphore)
+        if settings.DEVICE == "npu:0":
+            from app.services.realtime.client import get_engine_capabilities
+
+            memory["npu_memory"] = get_engine_capabilities().get("npu_memory")
+        elif torch.cuda.is_available():
+            memory["gpu_memory"] = {
+                "allocated": f"{torch.cuda.memory_allocated() / 1024**3:.2f}GB",
+                "cached": f"{torch.cuda.memory_reserved() / 1024**3:.2f}GB",
+                "max_allocated": f"{torch.cuda.max_memory_allocated() / 1024**3:.2f}GB",
+            }
+        return memory
+
+    async def acquire_engine(self, model_id: str | None = None) -> RuntimeEngineLease:
+        resolved = self.resolve_model_id(model_id)
+        await self._inference_lock.acquire()
+        try:
+            engine = await run_sync(self._get_engine, resolved)
+        except BaseException:
+            self._inference_lock.release()
+            raise
+        return RuntimeEngineLease(engine, self._inference_lock.release)
 
     async def run_offline(self, request: OfflineASRRequest) -> ASRFullResult:
         async with await self.acquire_engine(request.model_id) as engine:
             return await run_sync(
                 engine.transcribe_long_audio,
                 audio_path=request.audio_path,
-                enable_itn=request.enable_itn,
+                hotwords=request.hotwords,
                 sample_rate=request.sample_rate,
                 enable_speaker_diarization=request.enable_speaker_diarization,
+                word_timestamps=request.word_timestamps,
                 timestamp_scale=request.timestamp_scale,
                 task_id=request.task_id,
             )
 
 
-_runtime_router: Optional[RuntimeRouter] = None
+_runtime_router: RuntimeRouter | None = None
 _runtime_router_lock = threading.Lock()
 
 

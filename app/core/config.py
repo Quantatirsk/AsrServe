@@ -4,18 +4,23 @@
 ASR语音识别配置选项
 """
 
+import math
 import os
+import sys
 from typing import Optional
 from pathlib import Path
+
+
+OFFLINE_MAX_SECONDS = 60
 
 
 class Settings:
     """统一应用配置类"""
 
     # 应用信息
-    APP_NAME: str = "Qwen3-ASR Server"
+    APP_NAME: str = "R2T2 ASR Server"
     APP_VERSION: str = "1.0.3"
-    APP_DESCRIPTION: str = "Qwen3-ASR speech recognition API service"
+    APP_DESCRIPTION: str = "R2T2 offline and realtime speech recognition"
 
     # 服务器配置
     HOST: str = "0.0.0.0"
@@ -26,51 +31,35 @@ class Settings:
     API_KEY: Optional[str] = None  # 从环境变量API_KEY读取，如果为None则鉴权可选
 
     # 设备配置
-    DEVICE: str = "auto"  # auto, cpu, cuda:0, npu:0
-    SPEAKER_DIARIZATION_DEVICE: str = ""
-
-    # Remote vLLM configuration
-    QWEN_VLLM_BASE_URL: str = ""
-    QWEN_VLLM_SERVED_MODEL: str = "qwen3-asr"
-    QWEN_VLLM_API_KEY: Optional[str] = None
-    QWEN_VLLM_TIMEOUT_SEC: float = 3600.0
+    DEVICE: str = "cpu" if sys.platform == "darwin" else "cuda:0"
+    R2T2_CPU_THREADS: int = 8
+    ALIGNMENT_MODE: str = "forced"
+    SPEAKER_DIARIZATION_DEVICE: str = "cpu"
 
     # 路径配置
     BASE_DIR: Path = Path(__file__).parent.parent.parent
     TEMP_DIR: str = "temp"
-    # ModelScope 默认缓存结构: ~/.cache/modelscope/hub/models/{model_id}
-    MODELSCOPE_PATH: str = os.path.expanduser("~/.cache/modelscope/hub/models")
-
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FILE: Optional[str] = str(BASE_DIR / "logs" / "qwen3-asr.log")
     LOG_MAX_BYTES: int = 20 * 1024 * 1024  # 20MB
     LOG_BACKUP_COUNT: int = 50  # 保留50个备份文件
 
-    FUNASR_AUTOMODEL_KWARGS = {
-        "trust_remote_code": False,
-        "disable_update": True,
-        "disable_pbar": True,
-        "disable_log": True,  # 禁用FunASR的tables输出
-        "local_files_only": True,  # 强制使用本地模型，禁止联网下载
-    }
-    ASR_MODELS_CONFIG: str = str(BASE_DIR / "app/services/asr/models.json")
-    VAD_MODEL: str = "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+    NEMOTRON_MODEL_PATH: str = str(BASE_DIR / "models/nemotron-3-diarization")
+    R2T2_URL: str = ""
+    R2T2_INTERNAL_TOKEN: str = ""
     # 音频处理配置
     MAX_AUDIO_SIZE: int = 2048 * 1024 * 1024  # 2GB
 
-    # 批处理推理配置（GPU 真并行）
-    ASR_BATCH_SIZE: int = 4  # ASR 批处理大小（同时推理的片段数），建议 2-8
-
     # 音频分段配置
-    MAX_SEGMENT_SEC: float = 60.0  # Max offline ASR segment duration in seconds.
+    MAX_SEGMENT_SEC: float = float(OFFLINE_MAX_SECONDS)
 
-    def __init__(self):
+    def __init__(self) -> None:
         """从环境变量读取配置"""
         self._load_from_env()
         self._ensure_directories()
 
-    def _load_from_env(self):
+    def _load_from_env(self) -> None:
         """从环境变量加载配置"""
         # 服务器配置
         self.HOST = os.getenv("HOST", self.HOST)
@@ -90,20 +79,25 @@ class Settings:
 
         # 设备配置
         self.DEVICE = os.getenv("DEVICE", self.DEVICE)
-        self.SPEAKER_DIARIZATION_DEVICE = os.getenv(
-            "SPEAKER_DIARIZATION_DEVICE", self.SPEAKER_DIARIZATION_DEVICE
+        self.ALIGNMENT_MODE = os.getenv(
+            "ALIGNMENT_MODE", "uniform" if self.DEVICE == "npu:0" else "forced"
         )
+        if self.ALIGNMENT_MODE not in {"uniform", "forced"}:
+            raise ValueError("ALIGNMENT_MODE must be uniform or forced")
+        if self.DEVICE == "npu:0" and self.ALIGNMENT_MODE != "uniform":
+            raise ValueError("Ascend currently requires ALIGNMENT_MODE=uniform")
+        self.SPEAKER_DIARIZATION_DEVICE = os.getenv("SPEAKER_DIARIZATION_DEVICE", "cpu")
+        self.R2T2_CPU_THREADS = int(
+            os.getenv("R2T2_CPU_THREADS", str(self.R2T2_CPU_THREADS))
+        )
+        if self.R2T2_CPU_THREADS < 1:
+            raise ValueError("R2T2_CPU_THREADS must be greater than zero")
 
-        self.QWEN_VLLM_BASE_URL = os.getenv(
-            "QWEN_VLLM_BASE_URL", self.QWEN_VLLM_BASE_URL
-        ).rstrip("/")
-        self.QWEN_VLLM_SERVED_MODEL = os.getenv(
-            "QWEN_VLLM_SERVED_MODEL", self.QWEN_VLLM_SERVED_MODEL
+        self.NEMOTRON_MODEL_PATH = os.path.expanduser(
+            os.getenv("NEMOTRON_MODEL_PATH", self.NEMOTRON_MODEL_PATH)
         )
-        self.QWEN_VLLM_API_KEY = (os.getenv("QWEN_VLLM_API_KEY") or "").strip() or None
-        self.QWEN_VLLM_TIMEOUT_SEC = float(
-            os.getenv("QWEN_VLLM_TIMEOUT_SEC", str(self.QWEN_VLLM_TIMEOUT_SEC))
-        )
+        self.R2T2_URL = os.getenv("R2T2_URL", "").strip().rstrip("/")
+        self.R2T2_INTERNAL_TOKEN = os.getenv("R2T2_INTERNAL_TOKEN", "").strip()
 
         # 音频处理配置
         # 支持简化格式：纯数字表示MB，或带单位（如 2048MB, 2GB）
@@ -111,16 +105,16 @@ class Settings:
         if max_audio_size_str:
             self.MAX_AUDIO_SIZE = self._parse_size(max_audio_size_str)
 
-        self.ASR_BATCH_SIZE = int(os.getenv("ASR_BATCH_SIZE", str(self.ASR_BATCH_SIZE)))
-
         self.MAX_SEGMENT_SEC = float(
             os.getenv("MAX_SEGMENT_SEC", str(self.MAX_SEGMENT_SEC))
         )
-
-        self.MODELSCOPE_PATH = os.getenv(
-            "MODELSCOPE_PATH", self.MODELSCOPE_PATH
-        )
-
+        if (
+            not math.isfinite(self.MAX_SEGMENT_SEC)
+            or not 0 < self.MAX_SEGMENT_SEC <= OFFLINE_MAX_SECONDS
+        ):
+            raise ValueError(
+                f"MAX_SEGMENT_SEC must be greater than zero and at most {OFFLINE_MAX_SECONDS}"
+            )
 
     def _parse_size(self, size_str: str) -> int:
         """解析带单位的大小字符串
@@ -146,14 +140,9 @@ class Settings:
             # 默认视为字节
             return int(size_str)
 
-    def _ensure_directories(self):
+    def _ensure_directories(self) -> None:
         """确保必需的目录存在"""
         os.makedirs(self.TEMP_DIR, exist_ok=True)
-
-    @property
-    def models_config_path(self) -> str:
-        """获取模型配置文件的完整路径"""
-        return str(self.BASE_DIR / self.ASR_MODELS_CONFIG)
 
     @property
     def docs_url(self) -> Optional[str]:

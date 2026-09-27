@@ -1,4 +1,4 @@
-name: Ascend Offline CI
+name: Ascend Smoke
 
 on:
   push:
@@ -6,17 +6,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate-api:
+  smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 20
+    env:
+      DEVICE: cpu
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
-      - run: uv sync --frozen
-      - run: uv run python -m unittest discover -s tests -v
-      - run: uv run python -m compileall -q app tests
-      - run: bash -n scripts/stage-qwen-model.sh scripts/start-ascend-services.sh
+          python-version: "3.12"
+      - run: uv sync --frozen --extra cpu
+      - run: >-
+          uv run --frozen --extra cpu python -m pytest -q
+          tests/test_ascend_smoke.py tests/test_single_container.py
+          tests/test_r2t2_offline.py tests/test_diarized_pipeline.py
+          tests/test_segment_bounds.py tests/test_speaker_diarizer.py
+          tests/test_speaker_attribution.py tests/test_shared_inference.py
+          tests/test_realtime.py tests/test_api_contract.py
+      - run: uv run --frozen --extra cpu python -m compileall -q app deploy
+      - run: bash -n scripts/prepare-models.sh
+      - run: docker compose -f docker-compose.yml config --quiet
       - run: docker build --check -f Dockerfile.ascend .
-      - run: docker build -f Dockerfile.ascend -t qwen3-asr:ascend-single-container-test .

@@ -1,0 +1,51 @@
+FROM ghcr.io/astral-sh/uv:0.9.22 AS uv
+
+FROM rust:1-slim-bookworm AS rust
+RUN apt-get update && apt-get install -y --no-install-recommends libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY vendor/qwenasr /src
+WORKDIR /src
+# The x86 kernels call AVX2/FMA without runtime detection, so x86-64-v3 is the floor.
+ARG TARGETARCH
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    if [ "$TARGETARCH" = amd64 ]; then export RUSTFLAGS="-C target-cpu=x86-64-v3"; fi \
+    && cargo build --release --locked --features ffi --package qwen-asr \
+    && cp target/release/libqwen_asr.so /libqwen_asr.so
+
+FROM python:3.12-slim-bookworm AS python
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=uv /uv /usr/local/bin/uv
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
+WORKDIR /app
+COPY pyproject.toml uv.lock /app/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project --extra cpu \
+    && uv pip check --python /opt/venv/bin/python
+
+FROM python:3.12-slim-bookworm
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/root/.cache/huggingface \
+    HF_HUB_DISABLE_PROGRESS_BARS=1 \
+    TOKENIZERS_PARALLELISM=false \
+    PATH=/opt/venv/bin:$PATH \
+    DEVICE=cpu \
+    R2T2_CPU_LIBRARY_PATH=/opt/qwenasr/libqwen_asr.so \
+    OMP_NUM_THREADS=4 \
+    OPENBLAS_NUM_THREADS=8
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg libsndfile1 libopenblas0-pthread \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=python /opt/venv /opt/venv
+COPY --from=rust /libqwen_asr.so /opt/qwenasr/libqwen_asr.so
+RUN python -c "import ctypes, torch, torchaudio, transformers; from transformers import AutoModelForAudioFrameClassification; ctypes.CDLL('/opt/qwenasr/libqwen_asr.so')"
+WORKDIR /app
+COPY app /app/app
+COPY deploy /app/deploy
+COPY start.py /app/start.py
+RUN mkdir -p /app/temp /app/logs
+EXPOSE 8000
+HEALTHCHECK --interval=15s --timeout=10s --start-period=600s --retries=3 \
+    CMD ["python", "/app/start.py", "--healthcheck"]
+ENTRYPOINT ["python", "/app/start.py"]

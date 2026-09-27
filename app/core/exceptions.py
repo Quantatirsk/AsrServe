@@ -71,17 +71,10 @@ class APIException(Exception):
     def _get_error_code(self, status_code: int) -> str:
         """根据状态码获取错误代码"""
         code_mapping = {
-            20000000: "SUCCESS",
-            40000000: "DEFAULT_CLIENT_ERROR",
             40000001: "AUTHENTICATION_FAILED",
             40000002: "INVALID_MESSAGE",
             40000003: "INVALID_PARAMETER",
-            40000004: "IDLE_TIMEOUT",
-            40000005: "TOO_MANY_REQUESTS",
-            40000010: "TRIAL_EXPIRED",
-            41010101: "UNSUPPORTED_SAMPLE_RATE",
             50000000: "DEFAULT_SERVER_ERROR",
-            50000001: "INTERNAL_GRPC_ERROR",
         }
         return code_mapping.get(status_code, "UNKNOWN_ERROR")
 
@@ -120,13 +113,6 @@ class InvalidParameterException(APIException):
 
     def __init__(self, message: str, task_id: str = "", details: Optional[Dict[str, Any]] = None):
         super().__init__(40000003, message, task_id, details=details)
-
-
-class UnsupportedSampleRateException(APIException):
-    """不支持的采样率异常"""
-
-    def __init__(self, message: str, task_id: str = "", details: Optional[Dict[str, Any]] = None):
-        super().__init__(41010101, message, task_id, details=details)
 
 
 class DefaultServerErrorException(APIException):

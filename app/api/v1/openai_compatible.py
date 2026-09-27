@@ -17,15 +17,18 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.types import Receive, Scope, Send
 
-from ...core.executor import wait_for_completion
-from ...services.asr.results import ASRFullResult
-
 from ...core.config import settings
-from ...core.security import validate_openai_token
+from ...core.executor import wait_for_completion
+from ...services.asr.engines import ASRFullResult
+from ...core.security import validate_token
 from ...core.exceptions import (
+    APIException,
     create_error_response,
+    get_http_status_code,
 )
-from ...services.asr.manager import ASCEND_MODEL_ID
+from ...services.asr.model_selection import (
+    get_offline_model_ids,
+)
 from ...services.asr.offline_transcription_service import (
     OfflineTranscriptionOptions,
     get_offline_transcription_service,
@@ -39,6 +42,7 @@ HEARTBEAT_INTERVAL_SECONDS = 15.0
 
 # ============= 枚举类型 =============
 
+
 class ResponseFormat(str, Enum):
     JSON = "json"
     TEXT = "text"
@@ -49,8 +53,10 @@ class ResponseFormat(str, Enum):
 
 # ============= 响应模型 =============
 
+
 class TranscriptionSegment(BaseModel):
     """转写分段"""
+
     id: int
     seek: int = 0
     start: float
@@ -61,11 +67,17 @@ class TranscriptionSegment(BaseModel):
     avg_logprob: float = 0.0
     compression_ratio: float = 0.0
     no_speech_prob: float = 0.0
-    speaker: Optional[str] = Field(default=None, description="说话人ID")
+    speaker: Optional[str] = Field(
+        default=None, description="Speaker ID; null when unknown"
+    )
+    speaker_candidates: Optional[List[str]] = Field(
+        default=None, description="Candidate speakers for uncertain attribution"
+    )
 
 
 class TranscriptionWord(BaseModel):
     """转写词级别信息"""
+
     word: str
     start: float
     end: float
@@ -73,35 +85,48 @@ class TranscriptionWord(BaseModel):
 
 class TranscriptionResponse(BaseModel):
     """简单转写响应 (json 格式)"""
+
     text: str
+
+
+class SpeakerActivity(BaseModel):
+    start: float
+    end: float
+    speaker: str
+    confidence: float
 
 
 class VerboseTranscriptionResponse(BaseModel):
     """详细转写响应 (verbose_json 格式)"""
+
     task: str = "transcribe"
     language: str
     duration: float
     text: str
     segments: List[TranscriptionSegment] = Field(default_factory=list)
     words: Optional[List[TranscriptionWord]] = None
+    speaker_segments: Optional[List[SpeakerActivity]] = None
     word_timestamp_method: Optional[str] = None
 
 
 class ModelObject(BaseModel):
     """模型对象"""
+
     id: str
     object: str = "model"
     created: int = Field(default_factory=lambda: int(time.time()))
-    owned_by: str = "qwen3-asr"
+    owned_by: str = "netease-youdao"
 
 
 class ModelsResponse(BaseModel):
     """模型列表响应"""
+
     object: str = "list"
     data: List[ModelObject]
 
 
 # ============= 辅助函数 =============
+
 
 def format_timestamp_srt(seconds: float) -> str:
     """格式化时间戳为 SRT 格式 (HH:MM:SS,mmm)"""
@@ -184,6 +209,7 @@ def build_transcription_payload(
                 end=seg.end_time,
                 text=seg.text,
                 speaker=seg.speaker_id,
+                speaker_candidates=seg.speaker_candidates,
             )
         )
         if seg.word_tokens:
@@ -191,8 +217,8 @@ def build_transcription_payload(
                 words.append(
                     TranscriptionWord(
                         word=wt.text,
-                        start=wt.start_time,
-                        end=wt.end_time,
+                        start=round(seg.start_time + wt.start_time, 3),
+                        end=round(seg.start_time + wt.end_time, 3),
                     )
                 )
 
@@ -207,6 +233,19 @@ def build_transcription_payload(
             segments=segments,
             words=words if words else None,
             word_timestamp_method=asr_result.word_timestamp_method,
+            speaker_segments=(
+                [
+                    SpeakerActivity(
+                        start=span.start_sec,
+                        end=span.end_sec,
+                        speaker=span.speaker_id,
+                        confidence=span.confidence,
+                    )
+                    for span in asr_result.speaker_segments
+                ]
+                if asr_result.speaker_segments is not None
+                else None
+            ),
         ).model_dump()
     elif response_format == ResponseFormat.JSON:
         payload = {"text": asr_result.text}
@@ -254,6 +293,54 @@ class TranscriptionStreamingResponse(StreamingResponse):
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
         self._inference_task = inference_task
+
+    async def stream_response(self, send: Send) -> None:
+        started = False
+        while True:
+            finished = False
+            try:
+                chunk = await anext(self.body_iterator)
+            except StopAsyncIteration:
+                chunk, finished = b"", True
+            except Exception as exc:
+                logger.exception("Transcription response failed")
+                if isinstance(exc, APIException):
+                    status_code = get_http_status_code(exc.status_code)
+                    payload = exc.to_dict()
+                else:
+                    status_code = (
+                        exc.status_code if isinstance(exc, HTTPException) else 500
+                    )
+                    payload = create_error_response(
+                        error_code=(
+                            "DEFAULT_CLIENT_ERROR"
+                            if status_code < 500
+                            else "DEFAULT_SERVER_ERROR"
+                        ),
+                        message=(
+                            exc.detail if isinstance(exc, HTTPException) else str(exc)
+                        ),
+                    )
+                # Heartbeats commit HTTP 200; later errors can only change the body.
+                if not started:
+                    self.status_code = status_code
+                chunk, finished = JSONResponse(payload).body, True
+            if not started:
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": self.status_code,
+                        "headers": self.raw_headers,
+                    }
+                )
+                started = True
+            if not isinstance(chunk, (bytes, memoryview)):
+                chunk = chunk.encode(self.charset)
+            await send(
+                {"type": "http.response.body", "body": chunk, "more_body": not finished}
+            )
+            if finished:
+                return
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
@@ -322,46 +409,16 @@ def create_heartbeat_streaming_response(
 
 # ============= API 端点 =============
 
-def _get_openai_model_description() -> str:
-    """获取动态的模型描述"""
-    available_models = [ASCEND_MODEL_ID]
-    default_model = ASCEND_MODEL_ID
-
-    model_descriptions = {
-        "qwen3-asr-1.7b": "Qwen3-ASR 1.7B，Ascend vLLM 离线推理",
-    }
-
-    # 构建表格行
-    table_rows = []
-    for m in available_models:
-        desc = model_descriptions.get(m, "")
-        if m == default_model:
-            desc += "（默认）"
-        table_rows.append(f"| `{m}` | {desc} |")
-
-    return f"""返回当前可用的离线 Qwen3-ASR 模型列表（OpenAI `/v1/models` 兼容）。
-
-**可用离线模型：**
-
-| 模型 ID | 说明 |
-|---------|------|
-{chr(10).join(table_rows)}
-
-**兼容性说明：**
-- 支持 OpenAI SDK 和第三方客户端调用
-- 当前运行时只提供 `qwen3-asr-1.7b`
-"""
-
 
 @router.get(
     "/models",
     response_model=ModelsResponse,
-    summary="列出可用离线模型",
-    description=_get_openai_model_description(),
+    summary="列出可用模型",
+    description="List Confucius4-R2T2, the CUDA model for offline and realtime transcription.",
 )
 async def list_models(request: Request):
     """列出可用离线模型 (OpenAI 兼容)"""
-    result, _ = validate_openai_token(request)
+    result, _ = validate_token(request)
     if not result:
         response_data = create_error_response(
             error_code="AUTHENTICATION_FAILED",
@@ -370,17 +427,9 @@ async def list_models(request: Request):
         return JSONResponse(content=response_data, status_code=401)
 
     try:
-        # 使用动态模型列表
-        model_ids = [ASCEND_MODEL_ID]
-
-        model_objects = []
-        for model_id in model_ids:
-            model_objects.append(ModelObject(
-                id=model_id,
-                owned_by="qwen3-asr",
-            ))
-
-        return ModelsResponse(data=model_objects)
+        return ModelsResponse(
+            data=[ModelObject(id=model_id) for model_id in get_offline_model_ids()]
+        )
     except Exception as e:
         logger.error(f"获取模型列表失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -388,7 +437,7 @@ async def list_models(request: Request):
 
 def _get_transcription_description() -> str:
     """获取动态的转写端点描述"""
-    return f"""将音频文件转写为文本（完全兼容 OpenAI Audio API）。
+    return f"""将音频文件转写为文本（OpenAI Audio API 文件转写子集，不支持 Realtime 协议）。
 
 **支持的音频格式与常见含音轨视频容器：**
 `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `wav`, `webm`, `flac`, `ogg`, `amr`, `pcm`, `mov`, `mkv`, `avi`
@@ -418,8 +467,8 @@ def _get_transcription_description() -> str:
 | `vtt` | text/vtt | WebVTT 字幕格式 |
 
 **模型选择：**
-- 离线路径固定使用当前服务启用的唯一 Qwen3-ASR 模型
-- `/v1/models` 仍可用于查看当前服务端实际在线模型
+- Use `confucius4-r2t2` or omit `model` to select the default.
+- Other model IDs are rejected. `/v1/models` lists the supported model.
 
 **暂不支持的参数：**
 `prompt`、`temperature`、`timestamp_granularities` 参数已保留但暂不生效
@@ -437,9 +486,7 @@ def _get_transcription_description() -> str:
                 "application/json": {
                     "example": {"text": "今天天气不错，明天可能会下雨。"}
                 },
-                "text/plain": {
-                    "example": "今天天气不错，明天可能会下雨。"
-                },
+                "text/plain": {"example": "今天天气不错，明天可能会下雨。"},
             },
         },
         400: {
@@ -451,7 +498,7 @@ def _get_transcription_description() -> str:
                         "message": f"File too large. Maximum size is {settings.MAX_AUDIO_SIZE // (1024 * 1024)}MB",
                         "task_id": "",
                         "timestamp": "2025-01-31T12:00:00Z",
-                        "details": {}
+                        "details": {},
                     }
                 }
             },
@@ -465,7 +512,7 @@ def _get_transcription_description() -> str:
                         "message": "Invalid API key",
                         "task_id": "",
                         "timestamp": "2025-01-31T12:00:00Z",
-                        "details": {}
+                        "details": {},
                     }
                 }
             },
@@ -474,10 +521,14 @@ def _get_transcription_description() -> str:
 )
 async def create_transcription(
     request: Request,
+    model: Optional[str] = Form(
+        None,
+        description="Accepted for client compatibility. Any value uses Confucius4-R2T2.",
+    ),
     # 1. 音频输入（二选一）
     file: Optional[UploadFile] = File(
         default=None,
-        description="要转写的音频/视频文件。若同时提供 audio_address，服务会优先使用这里上传的文件"
+        description="要转写的音频/视频文件。若同时提供 audio_address，服务会优先使用这里上传的文件",
     ),
     audio_address: Optional[str] = Form(
         default=None,
@@ -492,11 +543,11 @@ async def create_transcription(
     # 4. 功能开关
     enable_speaker_diarization: bool = Form(
         True,
-        description="是否启用说话人分离（默认开启）。启用后响应 segments 会包含 speaker 字段"
+        description="是否启用说话人分离（默认开启）。启用后响应 segments 会包含 speaker 字段",
     ),
     word_timestamps: bool = Form(
         False,
-        description="是否返回按有效片段均匀估算的字词级时间戳（默认关闭）"
+        description="Return word timestamps using the forced aligner (disabled by default).",
     ),
     # 5. 输出选项
     response_format: ResponseFormat = Form(
@@ -506,21 +557,24 @@ async def create_transcription(
     ),
     # 6. 兼容性参数（暂不支持）
     prompt: Optional[str] = Form(None, description="提示文本（暂不支持，保留兼容）"),  # noqa: ARG001
-    temperature: Optional[float] = Form(0, description="采样温度（暂不支持，保留兼容）"),  # noqa: ARG001
+    temperature: Optional[float] = Form(
+        0, description="采样温度（暂不支持，保留兼容）"
+    ),  # noqa: ARG001
     timestamp_granularities: Optional[List[str]] = Form(  # noqa: ARG001
         None,
         alias="timestamp_granularities[]",
-        description="时间戳粒度（暂不支持，保留兼容）"
+        description="时间戳粒度（暂不支持，保留兼容）",
     ),
 ):
     """音频转写 API (OpenAI Audio API 兼容)"""
     # 标记暂不支持的参数（保留以兼容 OpenAI API）
-    _ = (prompt, temperature, timestamp_granularities)
+    _ = (model, prompt, temperature, timestamp_granularities)
 
-
-    logger.info(f"[OpenAI API] 收到转写请求: format={response_format}, "
-                f"speaker_diarization={enable_speaker_diarization}, word_level={word_timestamps}, "
-                f"audio_address={'有' if audio_address else '无'}")
+    logger.info(
+        f"[OpenAI API] 收到转写请求: format={response_format}, "
+        f"speaker_diarization={enable_speaker_diarization}, word_level={word_timestamps}, "
+        f"audio_address={'有' if audio_address else '无'}"
+    )
 
     # 验证输入：至少提供一种输入源；若二者同时存在，优先 file
     if not file and not audio_address:
@@ -530,10 +584,8 @@ async def create_transcription(
         )
         return JSONResponse(content=response_data, status_code=400)
 
-    transcription_service = get_offline_transcription_service()
-
     try:
-        result, _ = validate_openai_token(request)
+        result, _ = validate_token(request)
         if not result:
             response_data = create_error_response(
                 error_code="AUTHENTICATION_FAILED",
@@ -541,6 +593,7 @@ async def create_transcription(
             )
             return JSONResponse(content=response_data, status_code=401)
 
+        transcription_service = get_offline_transcription_service()
         audio_data = await file.read() if file is not None else None
         inference_task = await transcription_service.start_transcription(
             audio_data=audio_data,
@@ -554,11 +607,18 @@ async def create_transcription(
             ),
         )
         if response_format in {ResponseFormat.VERBOSE_JSON, ResponseFormat.JSON}:
-            return create_heartbeat_streaming_response(
+            response = create_heartbeat_streaming_response(
                 response_format=response_format,
                 inference_task=inference_task,
                 language=language,
             )
+            if word_timestamps or enable_speaker_diarization:
+                response.headers["X-Word-Timestamp-Method"] = (
+                    "uniform_fallback"
+                    if settings.ALIGNMENT_MODE == "uniform"
+                    else "forced_alignment"
+                )
+            return response
 
         asr_result = await inference_task
         payload, _, _ = build_transcription_payload(
@@ -567,16 +627,27 @@ async def create_transcription(
             audio_duration=asr_result.duration,
             language=language,
         )
+        headers = (
+            {"X-Word-Timestamp-Method": asr_result.word_timestamp_method}
+            if asr_result.word_timestamp_method
+            else {}
+        )
         if response_format == ResponseFormat.VTT:
-            return PlainTextResponse(content=payload, media_type="text/vtt")
-        return PlainTextResponse(content=payload)
+            return PlainTextResponse(
+                content=payload, media_type="text/vtt", headers=headers
+            )
+        return PlainTextResponse(content=payload, headers=headers)
 
     except HTTPException as http_exc:
         # 将 HTTPException 转换为标准错误格式
         logger.error(f"[OpenAI API] HTTP异常: {http_exc.detail}")
 
         response_data = create_error_response(
-            error_code="DEFAULT_CLIENT_ERROR" if http_exc.status_code < 500 else "DEFAULT_SERVER_ERROR",
+            error_code=(
+                "DEFAULT_CLIENT_ERROR"
+                if http_exc.status_code < 500
+                else "DEFAULT_SERVER_ERROR"
+            ),
             message=http_exc.detail,
         )
         return JSONResponse(content=response_data, status_code=http_exc.status_code)

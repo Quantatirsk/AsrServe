@@ -7,7 +7,6 @@ from .model_utils import (
     get_huggingface_model_cache_dir,
     is_huggingface_offline,
     resolve_huggingface_snapshot_dir,
-    resolve_model_path,
 )
 
 __all__ = [
@@ -16,5 +15,4 @@ __all__ = [
     "get_huggingface_model_cache_dir",
     "is_huggingface_offline",
     "resolve_huggingface_snapshot_dir",
-    "resolve_model_path",
 ]

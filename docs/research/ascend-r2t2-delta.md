@@ -1,6 +1,7 @@
 # Ascend 910B：当前 dev 与旧适配分支的迁移差异
 
-> 更新：2026-09-27。功能基线：`dev@2cfb68f`；旧适配基线：`codex/ascend-910b-adaptation@5251d43`。
+> 后续实现：本分支已同步 dev 并完成代码接线与本地烟测，见 [部署说明](../deployment-ascend.md)。本文保留迁移前调研记录，未完成的实机验收项仍未验收。
+> 更新：2026-09-27。功能基线：`dev@3af1c97`；旧适配基线：`codex/ascend-910b-adaptation@5251d43`。
 > 本文更新调研与验收要求，不表示已完成 NPU 代码适配或实机验证。整体方案见 [迁移可行性研究](./ascend-910b-feasibility.md)。
 
 ## 1. 当前判断
@@ -22,23 +23,23 @@
 | 模型推理失败 | 旧逻辑不可直接沿用 | Nemotron 失败明确报错，不能伪装为空活动并继续 |
 | 原始文本 | 曾有标点/规整后处理 | 标点补充已删除，不恢复 FunASR、CT-Transformer 或原文改写 |
 | 实时收尾 | 独立实时链路 | 低能量停顿检测保留；它不是离线语音检测的替代品 |
-| 长音频与段落 | 旧切分/合并 | 复用最大 60 秒分段、短插话归并和有依据的短 Unknown 边界合并规则 |
+| 长音频与段落 | 旧切分/合并 | 计算块与展示段落分离：保留 Nemotron 自然切块和 60 秒计算上限，不跨长停顿拼接；同一说话人跨块合并、无 30 秒段落上限；短插话归并；开启分离时不输出 Unknown，模糊处沿用当前说话人 |
 
-代码依据：[离线准备与结果组装](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/services/asr/long_audio.py)、[活动区间与 Nemotron](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/utils/speaker_diarizer.py)、[分段器](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/utils/audio_splitter.py)、[ASR 引擎](https://github.com/Quantatirsk/qwen3-asr/tree/2cfb68f/app/services/asr/engines)、[说话人归属](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/app/services/asr/speaker_attribution.py)。
+代码依据：[离线准备与结果组装](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/services/asr/long_audio.py)、[活动区间与 Nemotron](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/utils/speaker_diarizer.py)、[分段器](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/utils/audio_splitter.py)、[ASR 引擎](https://github.com/Quantatirsk/qwen3-asr/tree/3af1c97/app/services/asr/engines)、[说话人归属](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/app/services/asr/speaker_attribution.py)。
 
-FSMN 的加载、预加载、下载/完整性检查和配置已经删除，FunASR、ModelScope 及其仅为旧链路保留的直接依赖也已删除。**迁移清单不再包含这些模型。** 不要把旧分支的依赖文件整体覆盖到当前基线。[当前依赖](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/pyproject.toml)
+FSMN 的加载、预加载、下载/完整性检查和配置已经删除，FunASR、ModelScope 及其仅为旧链路保留的直接依赖也已删除。**迁移清单不再包含这些模型。** 不要把旧分支的依赖文件整体覆盖到当前基线。[当前依赖](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/pyproject.toml)
 
 ## 3. 真正剩余的接线工作
 
 ### 3.1 进程与设备
 
-当前启动器虽然运行两个进程，但二者都用 `sys.executable`，是**同一个 Python 环境**；私有进程只承载 R2T2，Nemotron 与 Aligner 位于公共 API 侧。旧分支的双环境启动经验可参考，不能认为当前已自动隔离依赖。[当前启动器](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/deploy/entrypoint.py)、[旧 Ascend 启动脚本](https://github.com/Quantatirsk/qwen3-asr/blob/5251d43/scripts/start-ascend-services.sh)
+当前启动器虽然运行两个进程，但二者都用 `sys.executable`，是**同一个 Python 环境**；私有进程只承载 R2T2，Nemotron 与 Aligner 位于公共 API 侧。旧分支的双环境启动经验可参考，不能认为当前已自动隔离依赖。[当前启动器](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/deploy/entrypoint.py)、[旧 Ascend 启动脚本](https://github.com/Quantatirsk/qwen3-asr/blob/5251d43/scripts/start-ascend-services.sh)
 
 最小方案是在同一容器内保留现有两个进程，让 R2T2 使用选定的 Ascend 运行环境，API 侧的 Nemotron 使用 CPU 环境。需实际接入两个解释器、明确每个模型的设备选择；不能用全局 `DEVICE=cpu` 掩盖主模型未上 NPU。也不能原样沿用启动器中的 `VLLM_PLUGINS=""`：应按选定 vLLM Ascend 版本验证平台插件发现与加载。
 
 ### 3.2 依赖兼容
 
-当前 dev 固定 Transformers 提交 `27166ea03f12c940f23176a904ab1d2ff1a3dcbb` 以运行 Nemotron；所查 vLLM Ascend `v0.27.1rc1` 要求 `transformers==5.14.1`。**这些基线的依赖约束不同，需要验证或隔离**；不能推导为所有版本永远无法共享环境，也不能未经回归就强行升级 Ascend 环境的单个包。[dev 依赖](https://github.com/Quantatirsk/qwen3-asr/blob/2cfb68f/pyproject.toml)、[Ascend 固定版本依赖](https://github.com/vllm-project/vllm-ascend/blob/v0.27.1rc1/requirements.txt)
+当前 dev 固定 Transformers 提交 `27166ea03f12c940f23176a904ab1d2ff1a3dcbb` 以运行 Nemotron；所查 vLLM Ascend `v0.27.1rc1` 要求 `transformers==5.14.1`。**这些基线的依赖约束不同，需要验证或隔离**；不能推导为所有版本永远无法共享环境，也不能未经回归就强行升级 Ascend 环境的单个包。[dev 依赖](https://github.com/Quantatirsk/qwen3-asr/blob/3af1c97/pyproject.toml)、[Ascend 固定版本依赖](https://github.com/vllm-project/vllm-ascend/blob/v0.27.1rc1/requirements.txt)
 
 当前 dev 已声明 `linux aarch64`，旧报告“锁文件完全不覆盖该平台”的结论已过时。仍需在目标 CPU 架构上核实 CPU wheel、音频库、Ascend 整套版本与安装结果；目标机器不能先验认定为鲲鹏。Ascend 的 vLLM、PyTorch、torch_npu、CANN 和驱动组合按选定发行版整体固定，不把当前 CUDA 锁文件直接用于 NPU。
 
@@ -60,7 +61,7 @@ Pooling 或 `token_classify` 出现在通用支持/测试清单，不能证明 `
 
 记录位于 **dev 工作区**的 `docs/research/nemotron-cpu.md` 与 `nemotron-cpu-machinelearning.json`。这些不是 910B 宿主测试，也不代表长会话或多路容量。流式累计计算不包含音频实际到达等待、网络与 ASR；不能由约四倍实时速度承诺四路并发。
 
-这些数据支持“先让 Nemotron 留在 CPU”，但没有证明其语音边界与 FSMN 准确率等价。无活动可能来自噪声、音乐、低声或短促语音，保留整段音频的空区间兜底必须继续存在。目标宿主需复测实际音频与并发，不能从离线耗时推算流式延迟。
+这些数据支持“先让 Nemotron 留在 CPU”，但没有证明其切点在真实录音上的质量。无活动可能来自噪声、音乐、低声或短促语音，保留整段音频的空区间兜底必须继续存在。目标宿主需复测实际音频与并发，不能从离线耗时推算流式延迟。
 
 ## 5. 最小迁移顺序与验收
 

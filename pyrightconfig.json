@@ -9,6 +9,6 @@
     "scripts",
     "video"
   ],
-  "venvPath": ".",
+  "venvPath": "environments/cpu",
   "venv": ".venv"
 }
