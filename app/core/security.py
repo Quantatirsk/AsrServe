@@ -8,9 +8,7 @@ from typing import Optional
 from fastapi import Request
 from .config import settings
 
-TOKEN_HEADER_NAME = "X-NLS-Token"
 AUTH_OPTIONAL_PLACEHOLDER = "optional"
-WEBSOCKET_QUERY_TOKEN_KEYS = ("token", "x_nls_token", "X-NLS-Token")
 
 
 def normalize_token(token: Optional[str]) -> Optional[str]:
@@ -83,11 +81,6 @@ def validate_token_value(token: Optional[str], expected_token: Optional[str] = N
     return True
 
 
-def extract_header_token(request: Request) -> Optional[str]:
-    """从标准头部提取 token。"""
-    return normalize_token(request.headers.get(TOKEN_HEADER_NAME))
-
-
 def extract_bearer_token(request: Request) -> Optional[str]:
     """从 Authorization: Bearer 提取 token。"""
     auth_header = request.headers.get("Authorization")
@@ -100,28 +93,11 @@ def extract_bearer_token(request: Request) -> Optional[str]:
     return normalize_token(value)
 
 
-def extract_openai_token(request: Request) -> Optional[str]:
-    """OpenAI 兼容接口鉴权：优先 Bearer，其次 X-NLS-Token。"""
-    return extract_bearer_token(request) or extract_header_token(request)
-
-
 def extract_websocket_token(websocket) -> Optional[str]:
-    """从 WebSocket 连接中提取 token。"""
-    if hasattr(websocket, "headers"):
-        token = extract_bearer_token(websocket)
-        if token:
-            return token
-        token = normalize_token(websocket.headers.get(TOKEN_HEADER_NAME))
-        if token:
-            return token
-
-    if hasattr(websocket, "query_params"):
-        for key in WEBSOCKET_QUERY_TOKEN_KEYS:
-            token = normalize_token(websocket.query_params.get(key))
-            if token:
-                return token
-
-    return None
+    """从 WebSocket 连接中提取 token；浏览器无法设置头部，可用 ?token=。"""
+    return extract_bearer_token(websocket) or normalize_token(
+        websocket.query_params.get("token")
+    )
 
 
 def _validate_resolved_token(
@@ -146,31 +122,16 @@ def _validate_resolved_token(
     return True, normalized_token
 
 
-def validate_token(request: Request, task_id: str = "") -> tuple[bool, str]:
-    """验证X-NLS-Token头部"""
-    _ = task_id
-    token = extract_header_token(request)
-    return _validate_resolved_token(token, "缺少X-NLS-Token头部")
-
-
-def validate_openai_token(request: Request, task_id: str = "") -> tuple[bool, str]:
-    """验证 OpenAI 兼容接口 token（Bearer/X-NLS-Token）。"""
-    _ = task_id
-    token = extract_openai_token(request)
-    return _validate_resolved_token(token, "缺少Authorization Bearer或X-NLS-Token头部")
-
-
-def validate_token_websocket(token: str, task_id: str = "") -> tuple[bool, str]:
-    """验证WebSocket连接中的token"""
-    _ = task_id
-    return _validate_resolved_token(token, "缺少token参数")
-
-
-def validate_websocket_token(websocket, task_id: str = "") -> tuple[bool, str]:
-    """验证 WebSocket 连接 token（header/query 参数）。"""
-    _ = task_id
-    token = extract_websocket_token(websocket)
+def validate_token(request: Request) -> tuple[bool, str]:
+    """验证 Authorization: Bearer。"""
     return _validate_resolved_token(
-        token,
-        "缺少鉴权信息，请通过 X-NLS-Token header 或 token/x_nls_token 查询参数传入",
+        extract_bearer_token(request), "缺少Authorization Bearer头部"
+    )
+
+
+def validate_websocket_token(websocket) -> tuple[bool, str]:
+    """验证 WebSocket 连接 token（Bearer 头部或 token 查询参数）。"""
+    return _validate_resolved_token(
+        extract_websocket_token(websocket),
+        "缺少鉴权信息，请通过 Authorization Bearer 头部或 token 查询参数传入",
     )

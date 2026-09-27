@@ -76,7 +76,6 @@ class ASRWebSocketClient(BaseWebSocketClient):
                     metrics.first_result_time = time.perf_counter()
                 if event.get("done"):
                     metrics.complete_time = time.perf_counter()
-                    metrics.sentence_end_time = metrics.complete_time
                     metrics.result_text = event["text"]
                     if self.save_result_dir:
                         self.save_result_dir.mkdir(parents=True, exist_ok=True)

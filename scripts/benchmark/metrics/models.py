@@ -17,9 +17,8 @@ class ASRMetrics:
     audio_duration_ms: float = 0.0
 
     # 时间戳
-    first_result_time: Optional[float] = None  # 第一个 TranscriptionResultChanged
-    sentence_end_time: Optional[float] = None  # SentenceEnd
-    complete_time: Optional[float] = None  # TranscriptionCompleted
+    first_result_time: Optional[float] = None  # 第一个 delta 事件
+    complete_time: Optional[float] = None  # done 事件
 
     # 结果
     result_text: str = ""
@@ -50,63 +49,9 @@ class ASRMetrics:
 
 
 @dataclass
-class TTSMetrics:
-    """TTS 单次请求指标"""
-
-    request_id: str
-    concurrency_level: int
-    start_time: float  # time.perf_counter()
-    text_length: int = 0
-    sample_rate: int = 22050
-
-    # 时间戳
-    first_chunk_time: Optional[float] = None  # 第一个音频二进制块
-    sentence_end_time: Optional[float] = None  # SentenceEnd
-    complete_time: Optional[float] = None  # SynthesisCompleted
-
-    # 结果
-    audio_bytes_received: int = 0
-    success: bool = False
-    error_message: str = ""
-
-    @property
-    def first_chunk_latency_ms(self) -> Optional[float]:
-        """首包延迟 (ms)"""
-        if self.first_chunk_time is not None:
-            return (self.first_chunk_time - self.start_time) * 1000
-        return None
-
-    @property
-    def total_synthesis_time_ms(self) -> Optional[float]:
-        """总合成时间 (ms)"""
-        if self.complete_time is not None:
-            return (self.complete_time - self.start_time) * 1000
-        return None
-
-    @property
-    def estimated_audio_duration_ms(self) -> float:
-        """估算的音频时长 (基于采样率和字节数)"""
-        if self.audio_bytes_received > 0:
-            # PCM 16-bit mono: 2 bytes per sample
-            samples = self.audio_bytes_received / 2
-            return (samples / self.sample_rate) * 1000
-        return 0.0
-
-    @property
-    def rtf(self) -> Optional[float]:
-        """RTF = 合成时间 / 生成音频时长"""
-        total_time = self.total_synthesis_time_ms
-        audio_duration = self.estimated_audio_duration_ms
-        if total_time is not None and audio_duration > 0:
-            return total_time / audio_duration
-        return None
-
-
-@dataclass
 class AggregatedMetrics:
     """聚合后的指标 (针对一个并发级别)"""
 
-    test_type: str  # "asr" or "tts"
     concurrency_level: int
     total_requests: int
     successful_requests: int

@@ -10,10 +10,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi_offline import FastAPIOffline
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
 from .core.config import settings
+from .services.asr.runtime import get_runtime_router
 from .core.exceptions import (
     APIException,
     api_exception_handler,
@@ -77,7 +77,6 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         shutdown_executor()
-        from .services.asr.runtime import get_runtime_router
 
         get_runtime_router().close()
         from .utils.speaker_diarizer import close_speaker_diarizer
@@ -112,9 +111,6 @@ def create_app() -> FastAPI:
     # 注册异常处理器
     app.add_exception_handler(APIException, api_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)
-
-    # 注册静态文件服务（用于临时文件）
-    app.mount("/tmp", StaticFiles(directory=settings.TEMP_DIR), name="temp_files")
 
     # 注册API路由
     app.include_router(api_router)

@@ -20,10 +20,10 @@ NODE_PATH="$PWD/.cache/browser-tests/node_modules" \
   node scripts/benchmark/realtime_browser.cjs
 ```
 
-原有通用压测工具保留 ASR 客户端，可指定端口和并发级别：
+并发压测工具按并发级别回放同一段录音，输出延迟、RTF 与吞吐量报告：
 
 ```bash
-uv run python -m scripts.benchmark.run --test-type asr \
+uv run python -m scripts.benchmark.run \
   --port 17003 --audio-file recording.wav --concurrency 1 2 4
 ```
 

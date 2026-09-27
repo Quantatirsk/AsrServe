@@ -31,7 +31,7 @@ with (
         return_value="confucius4-r2t2",
     ),
 ):
-    from app.api.v1 import asr, openai_compatible
+    from app.api.v1 import openai_compatible
 
 
 async def request(
@@ -387,16 +387,10 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         app = FastAPI()
         app.include_router(openai_compatible.router)
-        app.include_router(asr.router)
-        with (
-            patch.object(
-                openai_compatible,
-                "get_offline_transcription_service",
-                return_value=self.service,
-            ),
-            patch.object(
-                asr, "get_offline_transcription_service", return_value=self.service
-            ),
+        with patch.object(
+            openai_compatible,
+            "get_offline_transcription_service",
+            return_value=self.service,
         ):
             for fmt in ("json", "verbose_json", "text", "srt", "vtt"):
                 with self.subTest(format=fmt):
@@ -420,11 +414,6 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
                         self.assertIn(b"00:00:02,500", payload)
                     if fmt == "vtt":
                         self.assertTrue(payload.startswith(b"WEBVTT"))
-            status, payload = await request(
-                app, "/stream/v1/asr", b"audio", "application/octet-stream"
-            )
-            self.assertEqual(status, 200)
-            self.assertEqual(json.loads(payload)["result"], "recognized text")
         self.assert_cleaned_once()
 
     async def test_stream_send_failure_drains_owned_task(self) -> None:

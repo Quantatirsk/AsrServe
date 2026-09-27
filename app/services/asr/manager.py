@@ -4,8 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.core.exceptions import InvalidParameterException
-from app.infrastructure import get_huggingface_model_cache_dir
-from app.services.realtime.protocol import MODEL_ID, MODEL_REPOSITORY, MODEL_REVISION
+from app.services.realtime.protocol import MODEL_ID, MODEL_REPOSITORY
 
 if TYPE_CHECKING:
     from .r2t2_engine import R2T2Engine
@@ -23,33 +22,6 @@ class ModelManager:
         if model_id is not None and model_id != MODEL_ID:
             raise InvalidParameterException(f"Unsupported model: {model_id}")
         return ModelConfig()
-
-    def list_declared_entries(self) -> list[dict[str, object]]:
-        snapshot = (
-            get_huggingface_model_cache_dir(MODEL_REPOSITORY)
-            / "snapshots"
-            / MODEL_REVISION
-        )
-        return [
-            {
-                "id": MODEL_ID,
-                "kind": "model",
-                "name": "Confucius4-R2T2",
-                "engine": "r2t2",
-                "description": "R2T2 offline and realtime transcription",
-                "languages": ["zh", "en"],
-                "default": True,
-                "supports_realtime": True,
-                "offline_model": {
-                    "path": MODEL_REPOSITORY,
-                    "exists": snapshot.is_dir(),
-                },
-                "realtime_model": {
-                    "path": MODEL_REPOSITORY,
-                    "exists": snapshot.is_dir(),
-                },
-            }
-        ]
 
     def create_engine(self, model_id: str | None = None) -> "R2T2Engine":
         self.get_declared_entry_config(model_id)

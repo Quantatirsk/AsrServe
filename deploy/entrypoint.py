@@ -16,7 +16,7 @@ from pathlib import Path
 
 logger = logging.getLogger("single-container")
 ENGINE_URL = "http://127.0.0.1:8001/health"
-API_URL = "http://127.0.0.1:8000/stream/v1/asr/health"
+API_URL = "http://127.0.0.1:8000/health"
 
 
 @dataclass
@@ -32,7 +32,7 @@ def healthy(url: str, ready_key: str) -> bool:
     try:
         headers = {}
         if url == API_URL and os.environ.get("API_KEY"):
-            headers["X-NLS-Token"] = os.environ["API_KEY"].strip()
+            headers["Authorization"] = "Bearer " + os.environ["API_KEY"].strip()
         request = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(request, timeout=3) as response:
             payload = json.load(response)

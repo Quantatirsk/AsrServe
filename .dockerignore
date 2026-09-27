@@ -36,7 +36,6 @@ tmp/
 *.tmp
 
 # 模型文件（这些将通过volume挂载）
-tts/third_party/CosyVoice/pretrained_models/
 models/
 *.pt
 *.pth

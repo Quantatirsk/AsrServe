@@ -4,7 +4,7 @@
 
 - 实时与离线共用一份 R2T2 权重；离线独立识别原始录音。
 - Nemotron 提供说话人分离，Qwen3-ForcedAligner 提供字词时间戳。
-- 提供 OpenAI 兼容转写接口、阿里云兼容接口和浏览器录音页面。
+- 提供 OpenAI 兼容转写接口和浏览器录音页面。
 
 ## Docker 启动
 
@@ -20,7 +20,7 @@ docker compose -f compose.cpu.yaml up -d --build
 
 两份配置分别使用，不要叠加。镜像统一为 `quantatrisk/qwen3-asr:latest`；切换后端需要重新构建。
 
-默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/stream/v1/asr/health`。
+默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。
 
 `.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
 

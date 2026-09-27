@@ -161,8 +161,6 @@ voices/
 # 模型缓存
 .cache/
 models/
-!app/models/
-modelscope/
 
 # IDE
 .vscode/

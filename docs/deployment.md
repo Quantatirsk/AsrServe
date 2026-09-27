@@ -68,7 +68,7 @@ DEVICE=cpu OPENBLAS_NUM_THREADS=8 uv run --no-sync python start.py
 
 ```bash
 docker compose ps
-curl http://localhost:17003/stream/v1/asr/health
+curl http://localhost:17003/health
 ```
 
 配置鉴权时添加 `Authorization: Bearer <API_KEY>`。文件转写示例见 [README](../README.md)，实时与并发验收见 [benchmark](../scripts/benchmark/README.md)。

@@ -3,14 +3,7 @@
 Qwen3-ASR 并发性能测试主入口
 
 使用方法:
-    # 完整测试 (ASR + TTS)
     python -m scripts.benchmark.run --audio-file /path/to/audio.wav
-
-    # 仅测试 TTS
-    python -m scripts.benchmark.run --test-type tts
-
-    # 仅测试 ASR
-    python -m scripts.benchmark.run --audio-file /path/to/audio.wav --test-type asr
 
     # 自定义并发级别
     python -m scripts.benchmark.run --audio-file /path/to/audio.wav --concurrency 5 10 20
@@ -26,13 +19,10 @@ from typing import List
 
 from .config import TestConfig
 from .clients.asr_client import ASRWebSocketClient
-from .clients.tts_client import TTSWebSocketClient
-from .metrics.models import ASRMetrics, TTSMetrics, AggregatedMetrics
+from .metrics.models import ASRMetrics, AggregatedMetrics
 from .metrics.statistics import calculate_statistics
 from .reporters.markdown_reporter import MarkdownReporter
-from .reporters.chart_generator import ChartGenerator
 from .utils.audio_utils import load_audio_file
-from .utils.text_generator import generate_test_texts
 
 # 配置日志
 logging.basicConfig(
@@ -56,9 +46,6 @@ class ConcurrentBenchmark:
         # ASR 结果目录
         self.asr_output_dir = self.config.output_dir / "asr"
         self.asr_output_dir.mkdir(exist_ok=True)
-        # TTS 音频目录
-        self.tts_output_dir = self.config.output_dir / "tts"
-        self.tts_output_dir.mkdir(exist_ok=True)
 
     async def run_asr_benchmark(self) -> List[AggregatedMetrics]:
         """
@@ -97,7 +84,7 @@ class ConcurrentBenchmark:
             )
 
             # 正式测试
-            logger.info(f"  正式测试中...")
+            logger.info("  正式测试中...")
             start_time = time.perf_counter()
             metrics_list = await self._run_asr_concurrent(
                 audio_data, audio_duration_ms, level, level,
@@ -159,120 +146,12 @@ class ConcurrentBenchmark:
 
         return metrics_list
 
-    async def run_tts_benchmark(self) -> List[AggregatedMetrics]:
-        """
-        运行 TTS 并发测试
-
-        Returns:
-            各并发级别的聚合指标列表
-        """
-        logger.info("开始 TTS 并发性能测试...")
-
-        # 生成测试文本
-        test_texts = generate_test_texts(
-            count=self.config.tts_text_count,
-            length_range=self.config.tts_text_length_range,
-        )
-        logger.info(f"已生成 {len(test_texts)} 段测试文本")
-
-        results = []
-
-        for level in self.config.concurrency_levels:
-            logger.info(f"\n测试并发级别: {level}")
-
-            # 选择文本 (每个并发请求使用不同文本)
-            selected_texts = test_texts[:level]
-
-            # 预热
-            logger.info(f"  预热中 ({min(self.config.warmup_requests, level)} 次请求)...")
-            await self._run_tts_concurrent(
-                selected_texts[:min(self.config.warmup_requests, level)],
-                min(self.config.warmup_requests, level),
-                level,
-                save_audio=False,
-            )
-
-            # 正式测试
-            logger.info(f"  正式测试中...")
-            start_time = time.perf_counter()
-            metrics_list = await self._run_tts_concurrent(
-                selected_texts, level, level,
-                save_audio=True,  # 正式测试时保存音频
-            )
-            total_time = time.perf_counter() - start_time
-
-            # 统计
-            aggregated = calculate_statistics(metrics_list, level, total_time)
-            results.append(aggregated)
-
-            # 打印结果
-            logger.info(f"  完成: 成功 {aggregated.successful_requests}/{aggregated.total_requests}")
-            logger.info(f"  首包延迟: {aggregated.first_latency_avg:.1f} ms (avg)")
-            logger.info(f"  RTF: {aggregated.rtf_avg:.3f} (avg)")
-
-        return results
-
-    async def _run_tts_concurrent(
-        self,
-        texts: List[str],
-        num_requests: int,
-        concurrency_level: int,
-        save_audio: bool = False,
-    ) -> List[TTSMetrics]:
-        """运行并发 TTS 请求"""
-        tasks = []
-
-        for i in range(num_requests):
-            text = texts[i % len(texts)]
-            # 第一个请求始终开启调试模式
-            debug = (i == 0)
-            client = TTSWebSocketClient(
-                ws_url=self.config.tts_ws_url,
-                text=text,
-                voice=self.config.tts_voice,
-                audio_format=self.config.tts_format,
-                sample_rate=self.config.tts_sample_rate,
-                timeout=self.config.timeout_seconds,
-                chunk_interval=self.config.tts_chunk_interval,
-                debug=debug,
-                save_audio_dir=self.tts_output_dir if save_audio else None,
-            )
-            tasks.append(client.run_test())
-
-        # 添加进度提示
-        logger.info(f"    启动 {num_requests} 个并发请求...")
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info(f"    所有请求已完成")
-
-        # 处理结果
-        metrics_list = []
-        for result in results:
-            if isinstance(result, TTSMetrics):
-                result.concurrency_level = concurrency_level
-                metrics_list.append(result)
-            else:
-                # 异常情况
-                metrics = TTSMetrics(
-                    request_id="error",
-                    concurrency_level=concurrency_level,
-                    start_time=0,
-                    error_message=str(result),
-                )
-                metrics_list.append(metrics)
-
-        return metrics_list
-
-    def generate_report(
-        self,
-        asr_results: List[AggregatedMetrics],
-        tts_results: List[AggregatedMetrics],
-    ) -> Path:
+    def generate_report(self, asr_results: List[AggregatedMetrics]) -> Path:
         """
         生成测试报告
 
         Args:
             asr_results: ASR 测试结果
-            tts_results: TTS 测试结果
 
         Returns:
             报告文件路径
@@ -292,13 +171,15 @@ class ConcurrentBenchmark:
         # 生成 Markdown 报告
         report_path = output_dir / f"{self.config.report_name}_{timestamp}.md"
         reporter = MarkdownReporter()
-        reporter.generate(asr_results, tts_results, report_path, config_info)
+        reporter.generate(asr_results, report_path, config_info)
         logger.info(f"Markdown 报告已生成: {report_path}")
 
-        # 生成图表
+        # 生成图表 (matplotlib 为可选依赖，按需导入)
+        from .reporters.chart_generator import ChartGenerator
+
         chart_generator = ChartGenerator()
         chart_files = chart_generator.generate_all_charts(
-            asr_results, tts_results, output_dir, timestamp
+            asr_results, output_dir, timestamp
         )
         for chart_file in chart_files:
             logger.info(f"图表已生成: {chart_file}")
@@ -313,11 +194,7 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  # 完整测试 (ASR + TTS)
   python -m scripts.benchmark.run --audio-file test.wav
-
-  # 仅测试 TTS
-  python -m scripts.benchmark.run --test-type tts
 
   # 自定义并发级别
   python -m scripts.benchmark.run --audio-file test.wav --concurrency 5 10 20 50
@@ -338,20 +215,14 @@ def parse_args():
     parser.add_argument(
         "--audio-file",
         type=Path,
-        help="ASR 测试用音频文件路径 (测试 ASR 时必需)",
+        help="测试用音频文件路径 (必需)",
     )
     parser.add_argument(
         "--concurrency",
         nargs="+",
         type=int,
         default=[1, 2, 4],
-        help="并发级别列表 (默认: 5 10 20 50)",
-    )
-    parser.add_argument(
-        "--test-type",
-        choices=["asr", "tts", "both"],
-        default="both",
-        help="测试类型 (默认: both)",
+        help="并发级别列表 (默认: 1 2 4)",
     )
     parser.add_argument(
         "--output",
@@ -364,11 +235,6 @@ def parse_args():
         type=float,
         default=120.0,
         help="请求超时时间 (秒, 默认: 120)",
-    )
-    parser.add_argument(
-        "--voice",
-        default="中文女",
-        help="TTS 音色 (默认: 中文女)",
     )
 
     return parser.parse_args()
@@ -386,32 +252,22 @@ async def main():
         asr_audio_file=args.audio_file,
         output_dir=args.output,
         timeout_seconds=args.timeout,
-        tts_voice=args.voice,
     )
 
     # 验证配置
     try:
-        config.validate(args.test_type)
+        config.validate()
     except ValueError as e:
         logger.error(f"配置错误: {e}")
         return
 
     # 运行测试
     benchmark = ConcurrentBenchmark(config)
-
-    asr_results = []
-    tts_results = []
-
-    if args.test_type in ("asr", "both"):
-        asr_results = await benchmark.run_asr_benchmark()
-
-    if args.test_type in ("tts", "both"):
-        tts_results = await benchmark.run_tts_benchmark()
+    asr_results = await benchmark.run_asr_benchmark()
 
     # 生成报告
-    if asr_results or tts_results:
-        report_path = benchmark.generate_report(asr_results, tts_results)
-        logger.info(f"\n测试完成! 报告已保存到: {report_path}")
+    report_path = benchmark.generate_report(asr_results)
+    logger.info(f"\n测试完成! 报告已保存到: {report_path}")
 
 
 if __name__ == "__main__":

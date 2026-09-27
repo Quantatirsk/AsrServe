@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.core.security import validate_openai_token
+from app.core.security import validate_token
 from app.services.realtime.client import get_capabilities
 from app.services.realtime.gateway import handle_stream
 from app.services.realtime.protocol import StreamError
@@ -31,7 +31,7 @@ async def stream(websocket: WebSocket):
 
 @router.get("/v1/config")
 async def config(request: Request):
-    if not validate_openai_token(request)[0]:
+    if not validate_token(request)[0]:
         return JSONResponse(
             {"error": "Invalid authentication", "code": "invalid_api_key"},
             status_code=401,

@@ -25,10 +25,6 @@ class OfflineContractTest(unittest.TestCase):
         )
         self.assertEqual(assets[1].revision, MODEL_REVISION)
         self.assertEqual(assets[0].revision, "f667ed73aee57d40cc39428eb768b4fd87a0a29e")
-        models = get_model_manager().list_declared_entries()
-        self.assertEqual(len(models), 1)
-        self.assertTrue(models[0]["supports_realtime"])
-        self.assertEqual(models[0]["offline_model"], models[0]["realtime_model"])
         with self.assertRaises(InvalidParameterException):
             get_model_manager().get_declared_entry_config("unsupported-model")
 

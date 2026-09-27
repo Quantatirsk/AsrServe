@@ -20,7 +20,7 @@ from starlette.types import Receive, Scope, Send
 from ...core.config import settings
 from ...core.executor import wait_for_completion
 from ...services.asr.engines import ASRFullResult
-from ...core.security import validate_openai_token
+from ...core.security import validate_token
 from ...core.exceptions import (
     APIException,
     create_error_response,
@@ -416,7 +416,7 @@ def create_heartbeat_streaming_response(
 )
 async def list_models(request: Request):
     """列出可用离线模型 (OpenAI 兼容)"""
-    result, _ = validate_openai_token(request)
+    result, _ = validate_token(request)
     if not result:
         response_data = create_error_response(
             error_code="AUTHENTICATION_FAILED",
@@ -585,7 +585,7 @@ async def create_transcription(
         return JSONResponse(content=response_data, status_code=400)
 
     try:
-        result, _ = validate_openai_token(request)
+        result, _ = validate_token(request)
         if not result:
             response_data = create_error_response(
                 error_code="AUTHENTICATION_FAILED",

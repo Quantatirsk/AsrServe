@@ -30,7 +30,7 @@ class SegmentBoundsTest(unittest.TestCase):
                 self.assertEqual(sum(end - start for start, end in segments), duration)
                 self.assertTrue(all(a[1] == b[0] for a, b in pairwise(segments)))
 
-    def test_diarization_intervals_replace_vad_without_losing_audio(self) -> None:
+    def test_diarization_intervals_drive_cuts_without_losing_audio(self) -> None:
         overlapping = DiarizationResult(
             segments=[
                 SpeakerSegment(1.0, 30.0, "说话人1", 0.9),

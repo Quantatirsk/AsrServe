@@ -76,50 +76,6 @@ class BaseWebSocketClient(ABC):
             return json.loads(data)
         return None
 
-    async def wait_for_message(self, expected_name: str) -> Dict[str, Any]:
-        """
-        等待指定名称的消息
-
-        Args:
-            expected_name: 期望的消息名称
-
-        Returns:
-            消息数据
-
-        Raises:
-            Exception: 收到 TaskFailed 消息
-        """
-        while True:
-            response = await self.receive()
-            if isinstance(response, str):
-                data = json.loads(response)
-                header = data.get("header", {})
-                name = header.get("name", "")
-
-                if name == expected_name:
-                    return data
-                elif name == "TaskFailed":
-                    status_text = header.get("status_text", "Unknown error")
-                    raise Exception(f"TaskFailed: {status_text}")
-
-    def _create_header(self, name: str, namespace: str) -> Dict[str, Any]:
-        """
-        创建消息头部
-
-        Args:
-            name: 消息名称
-            namespace: 命名空间
-
-        Returns:
-            头部字典
-        """
-        return {
-            "message_id": self._generate_id(),
-            "task_id": self.task_id,
-            "namespace": namespace,
-            "name": name,
-        }
-
     @abstractmethod
     async def run_test(self) -> Any:
         """

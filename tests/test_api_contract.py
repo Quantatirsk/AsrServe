@@ -67,23 +67,7 @@ class APIContractTest(unittest.TestCase):
                         self.assertTrue(response.text.startswith("WEBVTT"))
         self.assertEqual(self.service.start_transcription.await_count, 5)
 
-    def test_aliyun_offline_contract(self):
-        with patch(
-            "app.api.v1.asr.get_offline_transcription_service",
-            return_value=self.service,
-        ):
-            response = self.client.post(
-                "/stream/v1/asr?word_timestamps=true", content=b"fake"
-            )
-        self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["result"], "hello")
-        self.assertEqual(response.json()["segments"][0]["speaker_id"], "speaker1")
-        self.assertEqual(
-            response.json()["segments"][0]["word_tokens"][0]["text"], "hello"
-        )
-        self.service.start_transcription.assert_awaited_once()
-
-    def test_overlap_metadata_and_fractional_offsets_survive_both_apis(self) -> None:
+    def test_overlap_metadata_and_fractional_offsets_survive(self) -> None:
         segments = [
             ASRSegmentResult(
                 "Mixed. ",
@@ -100,15 +84,9 @@ class APIContractTest(unittest.TestCase):
             SpeakerSegment(3, 4, "speaker1", 0.9),
             SpeakerSegment(3.5, 4.5, "speaker2", 0.8),
         ]
-        with (
-            patch(
-                "app.api.v1.openai_compatible.get_offline_transcription_service",
-                return_value=self.service,
-            ),
-            patch(
-                "app.api.v1.asr.get_offline_transcription_service",
-                return_value=self.service,
-            ),
+        with patch(
+            "app.api.v1.openai_compatible.get_offline_transcription_service",
+            return_value=self.service,
         ):
             for words in (True, False):
                 self.result = ASRFullResult(
@@ -122,7 +100,7 @@ class APIContractTest(unittest.TestCase):
                     5,
                     speaker_segments=spans,
                 )
-                with self.subTest(words=words, api="openai"):
+                with self.subTest(words=words):
                     response = self.client.post(
                         "/v1/audio/transcriptions",
                         files={"file": ("test.wav", b"fake", "audio/wav")},
@@ -166,57 +144,6 @@ class APIContractTest(unittest.TestCase):
                         )
                     else:
                         self.assertIsNone(payload.get("words"))
-                    self.assertEqual(
-                        self.service.start_transcription.call_args.kwargs[
-                            "options"
-                        ].word_timestamps,
-                        words,
-                    )
-                with self.subTest(words=words, api="aliyun"):
-                    response = self.client.post(
-                        f"/stream/v1/asr?word_timestamps={str(words).lower()}",
-                        content=b"fake",
-                    )
-                    self.assertEqual(response.status_code, 200, response.text)
-                    payload = response.json()
-                    self.assertEqual(
-                        payload["segments"][0]["speaker_candidates"],
-                        ["speaker1", "speaker2"],
-                    )
-                    self.assertIsNone(payload["segments"][0].get("speaker_id"))
-                    self.assertEqual(payload["segments"][0]["start_time"], 3.25)
-                    self.assertEqual(
-                        payload["speaker_segments"],
-                        [
-                            {
-                                "start_time": 3,
-                                "end_time": 4,
-                                "speaker_id": "speaker1",
-                                "confidence": 0.9,
-                            },
-                            {
-                                "start_time": 3.5,
-                                "end_time": 4.5,
-                                "speaker_id": "speaker2",
-                                "confidence": 0.8,
-                            },
-                        ],
-                    )
-                    if words:
-                        self.assertEqual(
-                            payload["segments"][0]["word_tokens"],
-                            [{"text": "Mixed", "start_time": 0.125, "end_time": 0.375}],
-                        )
-                        self.assertEqual(
-                            payload["segments"][1]["word_tokens"][0]["start_time"], 0
-                        )
-                    else:
-                        self.assertTrue(
-                            all(
-                                segment.get("word_tokens") is None
-                                for segment in payload["segments"]
-                            )
-                        )
                     self.assertEqual(
                         self.service.start_transcription.call_args.kwargs[
                             "options"
@@ -298,22 +225,6 @@ class APIContractTest(unittest.TestCase):
         self.assertEqual(response.json()["data"][0]["owned_by"], "netease-youdao")
         get_capabilities.assert_not_called()
 
-    def test_declared_models_share_one_offline_and_realtime_entry(self) -> None:
-        runtime = SimpleNamespace(
-            resolve_model_id=Mock(return_value=MODEL_ID),
-            get_loaded_model_ids=Mock(return_value=[MODEL_ID]),
-        )
-        with patch("app.api.v1.asr.get_runtime_router", return_value=runtime):
-            response = self.client.get("/stream/v1/asr/models")
-        self.assertEqual(response.status_code, 200, response.text)
-        metadata = response.json()
-        self.assertEqual(metadata["declared_count"], 1)
-        entry = metadata["declared_entries"][0]
-        self.assertEqual(entry["id"], MODEL_ID)
-        self.assertTrue(entry["supports_realtime"])
-        self.assertEqual(entry["offline_model"], entry["realtime_model"])
-        self.assertEqual(metadata["runtime"]["loaded_model_ids"], [MODEL_ID])
-
     def test_health_does_not_borrow_busy_offline_engine(self):
         runtime = SimpleNamespace(
             resolve_model_id=Mock(return_value=MODEL_ID),
@@ -323,14 +234,14 @@ class APIContractTest(unittest.TestCase):
                 side_effect=AssertionError("health borrowed engine")
             ),
         )
-        with patch("app.api.v1.asr.get_runtime_router", return_value=runtime):
-            with patch("app.api.v1.asr.detect_device", return_value="cuda:0"):
+        with patch("app.api.v1.get_runtime_router", return_value=runtime):
+            with patch("app.api.v1.detect_device", return_value="cuda:0"):
                 self.assertTrue(
-                    self.client.get("/stream/v1/asr/health").json()["model_loaded"]
+                    self.client.get("/health").json()["model_loaded"]
                 )
                 runtime.get_loaded_model_ids.return_value = []
                 self.assertFalse(
-                    self.client.get("/stream/v1/asr/health").json()["model_loaded"]
+                    self.client.get("/health").json()["model_loaded"]
                 )
         runtime.acquire_engine.assert_not_called()
 
@@ -345,7 +256,7 @@ class APIContractTest(unittest.TestCase):
             request: launcher.urllib.request.Request, timeout: float
         ) -> io.BytesIO:
             response = self.client.get(
-                "/stream/v1/asr/health", headers=dict(request.header_items())
+                "/health", headers=dict(request.header_items())
             )
             body = io.BytesIO(response.content)
             body.status = response.status_code
@@ -354,33 +265,24 @@ class APIContractTest(unittest.TestCase):
         with (
             patch.dict(os.environ, {"API_KEY": "health-test-token"}),
             patch.object(settings, "API_KEY", "health-test-token"),
-            patch("app.api.v1.asr.get_runtime_router", return_value=runtime),
-            patch("app.api.v1.asr.detect_device", return_value="cuda:0"),
+            patch("app.api.v1.get_runtime_router", return_value=runtime),
+            patch("app.api.v1.detect_device", return_value="cuda:0"),
             patch.object(launcher.urllib.request, "urlopen", side_effect=fetch),
         ):
             self.assertTrue(launcher.healthy(launcher.API_URL, "model_loaded"))
 
-    def test_realtime_auth_and_removed_chat_route(self):
+    def test_realtime_auth_and_unavailable_engine(self):
         with patch.object(settings, "API_KEY", "secret-token-123"):
             self.assertEqual(self.client.get("/v1/config").status_code, 401)
-            self.assertEqual(
-                self.client.post("/v1/chat/completions", json={}).status_code, 404
-            )
-            response = self.client.post(
-                "/v1/chat/completions",
-                headers={"Authorization": "Bearer secret-token-123"},
-                json={
-                    "model": MODEL_ID,
-                    "messages": [{"role": "user", "content": "hello"}],
-                    "tools": [],
-                },
-            )
-            self.assertEqual(response.status_code, 404)
-        with patch.object(settings, "R2T2_URL", ""):
-            with self.client.websocket_connect("/v1/stream") as ws:
-                ws.send_json({})
-                self.assertEqual(ws.receive_json()["code"], "realtime_unavailable")
-        for path in ("/ws/v1/asr", "/ws/v1/asr/funasr", "/ws/v1/asr/qwen"):
+            # Browsers cannot set headers, so the stream also accepts ?token=.
             with self.assertRaises(WebSocketDisconnect):
-                with self.client.websocket_connect(path):
+                with self.client.websocket_connect("/v1/stream"):
                     pass
+            with patch.object(settings, "R2T2_URL", ""):
+                with self.client.websocket_connect(
+                    "/v1/stream?token=secret-token-123"
+                ) as ws:
+                    ws.send_json({})
+                    self.assertEqual(
+                        ws.receive_json()["code"], "realtime_unavailable"
+                    )
