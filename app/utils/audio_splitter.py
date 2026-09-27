@@ -278,15 +278,20 @@ class AudioSplitter:
 
             # 开启说话人分离时复用 Nemotron 的活跃区间，省掉一次针对同一份音频的
             # 全程 VAD 推理；关闭分离时才回退到 FSMN VAD。
-            vad_segments = (
+            activity_segments = (
                 speech_segments
                 if speech_segments is not None
                 else self.get_vad_segments(audio_path)
             )
 
             # 贪婪合并
-            merged_segments = self.merge_segments_greedy(vad_segments, total_duration_ms)
-            logger.info(f"重分段完成: 原始VAD={len(vad_segments)}, 输出={len(merged_segments)}")
+            merged_segments = self.merge_segments_greedy(activity_segments, total_duration_ms)
+            logger.info(
+                "重分段完成: 来源=%s, 原始语音区间=%d, 输出=%d",
+                "Nemotron" if speech_segments is not None else "FSMN VAD",
+                len(activity_segments),
+                len(merged_segments),
+            )
 
             # 切分音频并保存到临时文件
             logger.info("开始切分音频并保存临时文件...")
