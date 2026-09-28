@@ -20,7 +20,9 @@ Self-hosted realtime and offline speech recognition. AsrServe always ships state
 
 ## Demo
 
-[![Demo](./demo/demo.png)](https://media.cdn.vect.one/qwenasr_client_demo.mp4)
+https://github.com/user-attachments/assets/ca6ed8ca-033d-4c58-85bb-2016d66151ea
+
+[Watch or download the original video](https://media.cdn.ieeio.com/qwenasr_client_demo.mp4)
 
 ## Contact Author
 
