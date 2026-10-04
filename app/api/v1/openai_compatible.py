@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 OpenAI 兼容 API
 实现 OpenAI Audio API 规范，兼容 OpenAI SDK 和第三方客户端
@@ -6,26 +5,26 @@ OpenAI 兼容 API
 
 import asyncio
 import json
-import time
 import logging
-from typing import AsyncIterator, Optional, List
-from enum import Enum
+import time
+from collections.abc import AsyncIterator
 from contextlib import suppress
+from enum import Enum
 
-from fastapi import APIRouter, File, Form, UploadFile, Request, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.types import Receive, Scope, Send
 
 from ...core.config import settings
-from ...core.executor import wait_for_completion
-from ...services.asr.engines import ASRFullResult
-from ...core.security import validate_token
 from ...core.exceptions import (
     APIException,
     create_error_response,
     get_http_status_code,
 )
+from ...core.executor import wait_for_completion
+from ...core.security import validate_token
+from ...services.asr.engines import ASRFullResult
 from ...services.asr.model_selection import (
     get_offline_model_ids,
 )
@@ -63,15 +62,13 @@ class TranscriptionSegment(BaseModel):
     start: float
     end: float
     text: str
-    tokens: List[int] = Field(default_factory=list)
+    tokens: list[int] = Field(default_factory=list)
     temperature: float = 0.0
     avg_logprob: float = 0.0
     compression_ratio: float = 0.0
     no_speech_prob: float = 0.0
-    speaker: Optional[str] = Field(
-        default=None, description="Speaker ID; null when unknown"
-    )
-    speaker_candidates: Optional[List[str]] = Field(
+    speaker: str | None = Field(default=None, description="Speaker ID; null when unknown")
+    speaker_candidates: list[str] | None = Field(
         default=None, description="Candidate speakers for uncertain attribution"
     )
 
@@ -104,10 +101,10 @@ class VerboseTranscriptionResponse(BaseModel):
     language: str
     duration: float
     text: str
-    segments: List[TranscriptionSegment] = Field(default_factory=list)
-    words: Optional[List[TranscriptionWord]] = None
-    speaker_segments: Optional[List[SpeakerActivity]] = None
-    word_timestamp_method: Optional[str] = None
+    segments: list[TranscriptionSegment] = Field(default_factory=list)
+    words: list[TranscriptionWord] | None = None
+    speaker_segments: list[SpeakerActivity] | None = None
+    word_timestamp_method: str | None = None
 
 
 class ModelObject(BaseModel):
@@ -123,7 +120,7 @@ class ModelsResponse(BaseModel):
     """模型列表响应"""
 
     object: str = "list"
-    data: List[ModelObject]
+    data: list[ModelObject]
 
 
 # ============= 辅助函数 =============
@@ -147,7 +144,7 @@ def format_timestamp_vtt(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
 
 
-def generate_srt(segments: List[TranscriptionSegment]) -> str:
+def generate_srt(segments: list[TranscriptionSegment]) -> str:
     """生成 SRT 字幕格式"""
     lines = []
     for i, seg in enumerate(segments, 1):
@@ -163,7 +160,7 @@ def generate_srt(segments: List[TranscriptionSegment]) -> str:
     return "\n".join(lines)
 
 
-def generate_vtt(segments: List[TranscriptionSegment]) -> str:
+def generate_vtt(segments: list[TranscriptionSegment]) -> str:
     """生成 WebVTT 字幕格式"""
     lines = ["WEBVTT", ""]
     for seg in segments:
@@ -178,7 +175,7 @@ def generate_vtt(segments: List[TranscriptionSegment]) -> str:
     return "\n".join(lines)
 
 
-def detect_language(text: str, language: Optional[str]) -> str:
+def detect_language(text: str, language: str | None) -> str:
     """检测识别语言。"""
     if language:
         return language
@@ -195,11 +192,11 @@ def build_transcription_payload(
     response_format: ResponseFormat,
     asr_result,
     audio_duration: float,
-    language: Optional[str],
+    language: str | None,
 ) -> tuple[object, int, int]:
     """构建 OpenAI 转写响应载荷，并返回 segments / words 计数。"""
-    segments: List[TranscriptionSegment] = []
-    words: List[TranscriptionWord] = []
+    segments: list[TranscriptionSegment] = []
+    words: list[TranscriptionWord] = []
 
     for i, seg in enumerate(asr_result.segments):
         segments.append(
@@ -309,18 +306,12 @@ class TranscriptionStreamingResponse(StreamingResponse):
                     status_code = get_http_status_code(exc.status_code)
                     payload = exc.to_dict()
                 else:
-                    status_code = (
-                        exc.status_code if isinstance(exc, HTTPException) else 500
-                    )
+                    status_code = exc.status_code if isinstance(exc, HTTPException) else 500
                     payload = create_error_response(
                         error_code=(
-                            "DEFAULT_CLIENT_ERROR"
-                            if status_code < 500
-                            else "DEFAULT_SERVER_ERROR"
+                            "DEFAULT_CLIENT_ERROR" if status_code < 500 else "DEFAULT_SERVER_ERROR"
                         ),
-                        message=(
-                            exc.detail if isinstance(exc, HTTPException) else str(exc)
-                        ),
+                        message=(exc.detail if isinstance(exc, HTTPException) else str(exc)),
                     )
                 # Heartbeats commit HTTP 200; later errors can only change the body.
                 if not started:
@@ -337,9 +328,7 @@ class TranscriptionStreamingResponse(StreamingResponse):
                 started = True
             if not isinstance(chunk, (bytes, memoryview)):
                 chunk = chunk.encode(self.charset)
-            await send(
-                {"type": "http.response.body", "body": chunk, "more_body": not finished}
-            )
+            await send({"type": "http.response.body", "body": chunk, "more_body": not finished})
             if finished:
                 return
 
@@ -357,7 +346,7 @@ def create_heartbeat_streaming_response(
     *,
     response_format: ResponseFormat,
     inference_task: asyncio.Task[ASRFullResult],
-    language: Optional[str],
+    language: str | None,
 ) -> StreamingResponse:
     """为长耗时 JSON 响应生成带心跳的流式输出。"""
 
@@ -490,9 +479,7 @@ def _get_transcription_description() -> str:
         200: {
             "description": "转写成功",
             "content": {
-                "application/json": {
-                    "example": {"text": "今天天气不错，明天可能会下雨。"}
-                },
+                "application/json": {"example": {"text": "今天天气不错，明天可能会下雨。"}},
                 "text/plain": {"example": "今天天气不错，明天可能会下雨。"},
             },
         },
@@ -528,21 +515,21 @@ def _get_transcription_description() -> str:
 )
 async def create_transcription(
     request: Request,
-    model: Optional[str] = Form(
+    model: str | None = Form(
         None,
         description="Accepted for client compatibility. Any value uses Confucius4-R2T2.",
     ),
     # 1. 音频输入（二选一）
-    file: Optional[UploadFile] = File(
+    file: UploadFile | None = File(
         default=None,
         description="要转写的音频/视频文件。若同时提供 audio_address，服务会优先使用这里上传的文件",
     ),
-    audio_address: Optional[str] = Form(
+    audio_address: str | None = Form(
         default=None,
         description="音频/视频文件 URL（HTTP/HTTPS）。仅当 file 为空时使用；若同时上传 file，服务会忽略此参数",
         json_schema_extra={"example": "https://media.cdn.vect.one/podcast_demo.mp4"},
     ),
-    language: Optional[str] = Form(
+    language: str | None = Form(
         None,
         description="音频语言代码（ISO-639-1），如 zh/en/ja，不填则自动检测",
         examples=["zh", "en", "ja"],
@@ -571,10 +558,9 @@ async def create_transcription(
         examples=["verbose_json", "json", "text", "srt", "vtt"],
     ),
     # 6. 兼容性参数（暂不支持）
-    temperature: Optional[float] = Form(
-        0, description="采样温度（暂不支持，保留兼容）"
-    ),  # noqa: ARG001
-    timestamp_granularities: Optional[List[str]] = Form(  # noqa: ARG001
+    prompt: str | None = Form(None, description="提示文本（暂不支持，保留兼容）"),
+    temperature: float | None = Form(0, description="采样温度（暂不支持，保留兼容）"),
+    timestamp_granularities: list[str] | None = Form(
         None,
         alias="timestamp_granularities[]",
         description="时间戳粒度（暂不支持，保留兼容）",
@@ -658,9 +644,7 @@ async def create_transcription(
             else {}
         )
         if response_format == ResponseFormat.VTT:
-            return PlainTextResponse(
-                content=payload, media_type="text/vtt", headers=headers
-            )
+            return PlainTextResponse(content=payload, media_type="text/vtt", headers=headers)
         return PlainTextResponse(content=payload, headers=headers)
 
     except HTTPException as http_exc:
@@ -669,9 +653,7 @@ async def create_transcription(
 
         response_data = create_error_response(
             error_code=(
-                "DEFAULT_CLIENT_ERROR"
-                if http_exc.status_code < 500
-                else "DEFAULT_SERVER_ERROR"
+                "DEFAULT_CLIENT_ERROR" if http_exc.status_code < 500 else "DEFAULT_SERVER_ERROR"
             ),
             message=http_exc.detail,
         )

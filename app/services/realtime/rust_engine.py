@@ -80,8 +80,8 @@ class RustAsyncEngine:
         except BaseException:
             self.backend.close()
             raise
-        self._queue: asyncio.PriorityQueue[tuple[int, int, _Request]] = (
-            asyncio.PriorityQueue(maxsize=2 * (max_sessions + 1))
+        self._queue: asyncio.PriorityQueue[tuple[int, int, _Request]] = asyncio.PriorityQueue(
+            maxsize=2 * (max_sessions + 1)
         )
         self._sequence = itertools.count()
         self._requests: dict[str, asyncio.Future[RequestOutput]] = {}
@@ -101,17 +101,13 @@ class RustAsyncEngine:
             raise ValueError("Duplicate inference request ID")
         ids = self.tokenizer.encode(prompt["prompt"], add_special_tokens=False)
         if ids.count(AUDIO_PAD) != 1:
-            raise ValueError(
-                "Rust audio prompt must contain exactly one audio pad token"
-            )
+            raise ValueError("Rust audio prompt must contain exactly one audio pad token")
         audio = prompt["multi_modal_data"]["audio"]
         if len(audio) != 1:
             raise ValueError("Rust inference accepts exactly one audio input")
         position = ids.index(AUDIO_PAD)
         future = asyncio.get_running_loop().create_future()
-        request = _Request(
-            audio[0], ids[:position], ids[position + 1 :], sampling, future
-        )
+        request = _Request(audio[0], ids[:position], ids[position + 1 :], sampling, future)
         self._requests[request_id] = future
         try:
             try:
@@ -144,9 +140,7 @@ class RustAsyncEngine:
                         result.token_ids,
                         skip_special_tokens=request.sampling.skip_special_tokens,
                     )
-                    request.future.set_result(
-                        RequestOutput([Output(text, result.finish_reason)])
-                    )
+                    request.future.set_result(RequestOutput([Output(text, result.finish_reason)]))
             except asyncio.CancelledError:
                 request.future.cancel()
                 raise
@@ -168,9 +162,7 @@ class RustAsyncEngine:
         try:
             if self._worker is not None:
                 self._worker.cancel()
-                await wait_for_completion(
-                    asyncio.gather(self._worker, return_exceptions=True)
-                )
+                await wait_for_completion(asyncio.gather(self._worker, return_exceptions=True))
         finally:
             self.backend.close()
             while not self._queue.empty():

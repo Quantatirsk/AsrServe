@@ -1,8 +1,8 @@
 import asyncio
 import io
 import os
-from dataclasses import replace
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -16,6 +16,7 @@ from app.services.asr.engines import ASRFullResult, ASRSegmentResult, WordToken
 from app.services.realtime.protocol import MAX_CONTEXT_CHARACTERS, MODEL_ID, StreamError
 from deploy import entrypoint as launcher
 from app.utils.speaker_diarizer import SpeakerSegment
+from deploy import entrypoint as launcher
 
 
 class APIContractTest(unittest.TestCase):
@@ -59,9 +60,7 @@ class APIContractTest(unittest.TestCase):
                     self.assertEqual(response.status_code, 200, response.text)
                     self.assertIn("hello", response.text)
                     if fmt == "verbose_json":
-                        self.assertEqual(
-                            response.json()["segments"][0]["speaker"], "speaker1"
-                        )
+                        self.assertEqual(response.json()["segments"][0]["speaker"], "speaker1")
                         self.assertEqual(response.json()["words"][0]["word"], "hello")
                     if fmt == "vtt":
                         self.assertTrue(response.text.startswith("WEBVTT"))
@@ -76,9 +75,7 @@ class APIContractTest(unittest.TestCase):
                 word_tokens=[WordToken("Mixed", 0.125, 0.375)],
                 speaker_candidates=["speaker1", "speaker2"],
             ),
-            ASRSegmentResult(
-                "Again.", 4.5, 5, "speaker1", [WordToken("Again", 0, 0.2)]
-            ),
+            ASRSegmentResult("Again.", 4.5, 5, "speaker1", [WordToken("Again", 0, 0.2)]),
         ]
         spans = [
             SpeakerSegment(3, 4, "speaker1", 0.9),
@@ -92,9 +89,7 @@ class APIContractTest(unittest.TestCase):
                 self.result = ASRFullResult(
                     "Mixed. Again.",
                     [
-                        replace(
-                            segment, word_tokens=segment.word_tokens if words else None
-                        )
+                        replace(segment, word_tokens=segment.word_tokens if words else None)
                         for segment in segments
                     ],
                     5,
@@ -307,19 +302,13 @@ class APIContractTest(unittest.TestCase):
             resolve_model_id=Mock(return_value=MODEL_ID),
             get_loaded_model_ids=Mock(return_value=[MODEL_ID]),
             get_memory_usage=Mock(return_value={}),
-            acquire_engine=AsyncMock(
-                side_effect=AssertionError("health borrowed engine")
-            ),
+            acquire_engine=AsyncMock(side_effect=AssertionError("health borrowed engine")),
         )
         with patch("app.api.v1.get_runtime_router", return_value=runtime):
             with patch("app.api.v1.detect_device", return_value="cuda:0"):
-                self.assertTrue(
-                    self.client.get("/health").json()["model_loaded"]
-                )
+                self.assertTrue(self.client.get("/health").json()["model_loaded"])
                 runtime.get_loaded_model_ids.return_value = []
-                self.assertFalse(
-                    self.client.get("/health").json()["model_loaded"]
-                )
+                self.assertFalse(self.client.get("/health").json()["model_loaded"])
         runtime.acquire_engine.assert_not_called()
 
     def test_startup_probe_authenticates_to_the_health_route(self) -> None:
@@ -329,12 +318,8 @@ class APIContractTest(unittest.TestCase):
             get_memory_usage=Mock(return_value={}),
         )
 
-        def fetch(
-            request: launcher.urllib.request.Request, timeout: float
-        ) -> io.BytesIO:
-            response = self.client.get(
-                "/health", headers=dict(request.header_items())
-            )
+        def fetch(request: launcher.urllib.request.Request, timeout: float) -> io.BytesIO:
+            response = self.client.get("/health", headers=dict(request.header_items()))
             body = io.BytesIO(response.content)
             body.status = response.status_code
             return body
@@ -355,11 +340,9 @@ class APIContractTest(unittest.TestCase):
             with self.assertRaises(WebSocketDisconnect):
                 with self.client.websocket_connect("/v1/stream"):
                     pass
-            with patch.object(settings, "R2T2_URL", ""):
-                with self.client.websocket_connect(
-                    "/v1/stream?token=secret-token-123"
-                ) as ws:
-                    ws.send_json({})
-                    self.assertEqual(
-                        ws.receive_json()["code"], "realtime_unavailable"
-                    )
+            with (
+                patch.object(settings, "R2T2_URL", ""),
+                self.client.websocket_connect("/v1/stream?token=secret-token-123") as ws,
+            ):
+                ws.send_json({})
+                self.assertEqual(ws.receive_json()["code"], "realtime_unavailable")

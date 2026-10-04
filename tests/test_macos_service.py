@@ -1,10 +1,10 @@
 """launchd must finish unloading before installation can restart a service."""
 
-from pathlib import Path
 import runpy
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -25,9 +25,7 @@ class MacOSServiceTest(unittest.TestCase):
                 patch("time.sleep") as sleep,
                 patch(
                     "subprocess.run",
-                    side_effect=[
-                        subprocess.CompletedProcess([], code) for code in (0, 0, 0, 1)
-                    ],
+                    side_effect=[subprocess.CompletedProcess([], code) for code in (0, 0, 0, 1)],
                 ) as run,
             ):
                 main()

@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen --no-install-project
+          uv sync --frozen
 
       - name: Install development tools
         run: |

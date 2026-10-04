@@ -42,9 +42,7 @@ class ForcedAligner:
         try:
             vllm_module = importlib.import_module("vllm")
         except ImportError as exc:
-            raise RuntimeError(
-                "CUDA forced alignment requires vllm[audio]==0.30.0"
-            ) from exc
+            raise RuntimeError("CUDA forced alignment requires vllm[audio]==0.30.0") from exc
         model_path = str(resolve_huggingface_snapshot_dir(model_path))
         memory = _gpu_memory_utilization()
         logger.info(
@@ -92,11 +90,7 @@ class ForcedAligner:
         )
         output = outputs[0]
         logits = output.outputs.data
-        predictions = (
-            logits.argmax(-1)
-            if hasattr(logits, "argmax")
-            else np.argmax(logits, axis=-1)
-        )
+        predictions = logits.argmax(-1) if hasattr(logits, "argmax") else np.argmax(logits, axis=-1)
         ts_predictions = [
             float(pred.item() if hasattr(pred, "item") else pred)
             * float(self._timestamp_segment_time or 0.0)

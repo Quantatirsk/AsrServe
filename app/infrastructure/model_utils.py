@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
 """Shared model path resolution helpers."""
 
 import os
 from pathlib import Path
-from typing import Optional
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -39,7 +37,7 @@ def get_huggingface_model_cache_dir(model_id: str) -> Path:
     return get_huggingface_cache_root() / f"models--{org}--{model}"
 
 
-def find_huggingface_snapshot_dir(model_ref_or_path: str) -> Optional[Path]:
+def find_huggingface_snapshot_dir(model_ref_or_path: str) -> Path | None:
     raw_path = Path(model_ref_or_path).expanduser()
     if raw_path.exists():
         return raw_path.resolve()

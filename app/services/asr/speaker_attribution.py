@@ -102,10 +102,7 @@ def consolidate_speaker_turns(
                         absorbed = True
                     break
                 interruption_seconds += (
-                    sum(
-                        word.end_time - word.start_time
-                        for word in candidate.word_tokens
-                    )
+                    sum(word.end_time - word.start_time for word in candidate.word_tokens)
                     if candidate.word_tokens
                     else candidate.end_time - candidate.start_time
                 )
@@ -146,9 +143,7 @@ def assign_speakers(
             ranges[-1] = (ranges[-1][0], max(ranges[-1][1], segment.end_sec))
         else:
             ranges.append((segment.start_sec, segment.end_sec))
-    interval_ends = {
-        speaker: [end for _, end in spans] for speaker, spans in intervals.items()
-    }
+    interval_ends = {speaker: [end for _, end in spans] for speaker, spans in intervals.items()}
     current_speaker = None
 
     def attribute(start: float, end: float) -> str:
@@ -171,14 +166,9 @@ def assign_speakers(
             for speaker, fraction in coverage.items()
             if fraction + 1e-9 >= MATERIAL_SPEAKER_COVERAGE
         ]
-        if (
-            len(candidates) == 1
-            and coverage[candidates[0]] + 1e-9 >= MIN_SPEAKER_COVERAGE
-        ):
+        if len(candidates) == 1 and coverage[candidates[0]] + 1e-9 >= MIN_SPEAKER_COVERAGE:
             current_speaker = candidates[0]
-        elif current_speaker is None or (
-            candidates and current_speaker not in candidates
-        ):
+        elif current_speaker is None or (candidates and current_speaker not in candidates):
             if coverage:
                 current_speaker = max(coverage, key=coverage.get)
             elif ordered:
@@ -197,9 +187,7 @@ def assign_speakers(
         words = result.word_tokens or []
         positions = _text_positions(result.text)
         normalized = "".join(result.text[index] for index in positions)
-        units = [
-            "".join(word.text[i] for i in _text_positions(word.text)) for word in words
-        ]
+        units = ["".join(word.text[i] for i in _text_positions(word.text)) for word in words]
         if not words or not all(units) or "".join(units) != normalized:
             # Keep an unaligned ASR block intact rather than inventing text cuts.
             output.append(
@@ -221,16 +209,12 @@ def assign_speakers(
                 <= word.end_time
                 <= result.end_time - result.start_time + 1e-6
             ):
-                raise ValueError(
-                    "Aligned word timestamps are outside their ASR segment"
-                )
+                raise ValueError("Aligned word timestamps are outside their ASR segment")
             start = result.start_time + word.start_time
             end = result.start_time + word.end_time
             speaker = attribute(start, end)
             unit_offset += len(unit)
-            text_end = (
-                positions[unit_offset] if index + 1 < len(words) else len(result.text)
-            )
+            text_end = positions[unit_offset] if index + 1 < len(words) else len(result.text)
             piece = result.text[text_offset:text_end]
             text_offset = text_end
             if groups and groups[-1].speaker_id == speaker:

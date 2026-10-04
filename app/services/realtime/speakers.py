@@ -74,9 +74,7 @@ class SpeakerStream:
     def ready(self) -> list[dict]:
         """Pop labels whose audio Nemotron already covers; runs no inference."""
         events = []
-        while self.pending and (
-            self.finished or self.frames * FRAME_SAMPLES >= self.pending[0][2]
-        ):
+        while self.pending and (self.finished or self.frames * FRAME_SAMPLES >= self.pending[0][2]):
             index, start, end = self.pending.popleft()
             events.append({"utterance": index, "speaker": self._label(start, end)})
         return events

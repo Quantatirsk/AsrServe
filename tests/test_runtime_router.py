@@ -20,9 +20,7 @@ class _StatefulEngine:
         self.max_active = 0
         self.current_audio_path = ""
 
-    def transcribe_long_audio(
-        self, *, audio_path: str, **_kwargs: object
-    ) -> ASRFullResult:
+    def transcribe_long_audio(self, *, audio_path: str, **_kwargs: object) -> ASRFullResult:
         with self._lock:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
@@ -49,9 +47,7 @@ class RuntimeRouterTest(unittest.IsolatedAsyncioTestCase):
             )
             for index in range(8)
         ]
-        results = await asyncio.gather(
-            *(router.run_offline(request) for request in requests)
-        )
+        results = await asyncio.gather(*(router.run_offline(request) for request in requests))
 
         self.assertEqual(engine.max_active, 1)
         self.assertEqual(

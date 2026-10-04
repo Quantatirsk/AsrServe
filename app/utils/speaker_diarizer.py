@@ -1,14 +1,14 @@
 """Nemotron diarization on a recording's original, possibly overlapping timeline."""
 
-from dataclasses import dataclass
 import math
 import threading
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import librosa
-from loguru import logger
 import numpy as np
 import torch
+from loguru import logger
 
 from ..core.config import settings
 from ..core.device import detect_device
@@ -144,17 +144,11 @@ class SpeakerDiarizer:
                         or inputs.attention_mask.shape != logits.shape[:2]
                         or not torch.isfinite(logits).all()
                     ):
-                        raise ValueError(
-                            "Invalid Nemotron frame logits or attention mask"
-                        )
-                    raw_segments = processor.extract_speaker_dict(
-                        logits, inputs.attention_mask
-                    )[0]
+                        raise ValueError("Invalid Nemotron frame logits or attention mask")
+                    raw_segments = processor.extract_speaker_dict(logits, inputs.attention_mask)[0]
                     probabilities = logits.sigmoid()[0]
                     probabilities = (
-                        probabilities.masked_fill(
-                            ~inputs.attention_mask[0].bool()[:, None], 0
-                        )
+                        probabilities.masked_fill(~inputs.attention_mask[0].bool()[:, None], 0)
                         .float()
                         .cpu()
                         .numpy()
@@ -162,9 +156,7 @@ class SpeakerDiarizer:
                 return self._make_result(raw_segments, probabilities, duration)
         except Exception as exc:
             logger.exception("Nemotron diarization failed")
-            raise DefaultServerErrorException(
-                f"Speaker diarization failed: {exc}"
-            ) from exc
+            raise DefaultServerErrorException(f"Speaker diarization failed: {exc}") from exc
 
     def _make_result(
         self,

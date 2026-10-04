@@ -30,9 +30,7 @@ async def handle_stream(websocket: WebSocket):
         return
     await websocket.accept()
     try:
-        config = StreamConfig.model_validate(
-            await asyncio.wait_for(websocket.receive_json(), 10)
-        )
+        config = StreamConfig.model_validate(await asyncio.wait_for(websocket.receive_json(), 10))
         speakers = SpeakerStream()
         async with open_stream(config) as (upstream, ready):
             lock = asyncio.Lock()
@@ -52,17 +50,11 @@ async def handle_stream(websocket: WebSocket):
                     if message["type"] == "websocket.disconnect":
                         return
                     if ended:
-                        raise StreamError(
-                            "session_finished", "No messages are allowed after end"
-                        )
+                        raise StreamError("session_finished", "No messages are allowed after end")
                     data = message.get("bytes")
                     if data is not None:
                         samples += validate_pcm(data)
-                        if (
-                            samples
-                            > min(MAX_SECONDS, ready["max_session_seconds"])
-                            * SAMPLE_RATE
-                        ):
+                        if samples > min(MAX_SECONDS, ready["max_session_seconds"]) * SAMPLE_RATE:
                             raise StreamError(
                                 "session_limit", "Session audio duration limit exceeded"
                             )
@@ -84,9 +76,7 @@ async def handle_stream(websocket: WebSocket):
                     spoken = spoken or bool(event["delta"].strip())
                     if event["utterance_end"]:
                         if spoken:
-                            speakers.utterance(
-                                event["utterance"], start_ms, event["audio_ms"]
-                            )
+                            speakers.utterance(event["utterance"], start_ms, event["audio_ms"])
                         start_ms, spoken = event["audio_ms"], False
                     if event["done"]:
                         # Every label precedes done, so clients can close on it.
@@ -112,9 +102,7 @@ async def handle_stream(websocket: WebSocket):
             logger.exception("Realtime gateway failed")
             code, message = "stream_failed", "Realtime session failed"
         with suppress(WebSocketDisconnect, RuntimeError, OSError, TimeoutError):
-            await asyncio.wait_for(
-                websocket.send_json({"error": message, "code": code}), 2
-            )
+            await asyncio.wait_for(websocket.send_json({"error": message, "code": code}), 2)
     finally:
         with suppress(WebSocketDisconnect, RuntimeError, OSError, TimeoutError):
             await asyncio.wait_for(websocket.close(), 2)

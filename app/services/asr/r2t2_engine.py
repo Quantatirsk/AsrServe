@@ -55,17 +55,13 @@ class R2T2Engine:
             if not segment.temp_file or not Path(segment.temp_file).is_file():
                 raise FileNotFoundError(f"Missing audio segment: {segment.temp_file}")
         audios = [
-            segment.audio_data
-            if segment.audio_data is not None
-            else _load_audio(segment.temp_file)
+            segment.audio_data if segment.audio_data is not None else _load_audio(segment.temp_file)
             for segment in segments
         ]
         # The engine batches concurrent segments; alignment stays serial.
         pool = ThreadPoolExecutor(OFFLINE_CONCURRENCY)
         try:
-            texts = list(
-                pool.map(lambda audio: transcribe_segment(audio, hotwords), audios)
-            )
+            texts = list(pool.map(lambda audio: transcribe_segment(audio, hotwords), audios))
         finally:
             pool.shutdown(cancel_futures=True)
         texts = restore_punctuation(texts)
@@ -118,9 +114,7 @@ class R2T2Engine:
                 sample_rate=sample_rate,
                 word_timestamps=word_timestamps or enable_speaker_diarization,
             )
-            result = audio.finish(
-                results, timestamp_scale, word_timestamps=word_timestamps
-            )
+            result = audio.finish(results, timestamp_scale, word_timestamps=word_timestamps)
             if word_timestamps or enable_speaker_diarization:
                 result.word_timestamp_method = (
                     "uniform_fallback" if self.aligner is None else "forced_alignment"

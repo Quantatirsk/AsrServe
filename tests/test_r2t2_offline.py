@@ -54,9 +54,7 @@ class SharedOfflineClientTest(unittest.TestCase):
                 return_value=io.BytesIO(json.dumps({"text": "Fresh result."}).encode()),
             ) as send,
         ):
-            self.assertEqual(
-                transcribe_segment(audio, "Names: Ada & Alan"), "Fresh result."
-            )
+            self.assertEqual(transcribe_segment(audio, "Names: Ada & Alan"), "Fresh result.")
         request = send.call_args.args[0]
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(urlsplit(request.full_url).path, "/v1/transcribe")
@@ -174,27 +172,19 @@ class R2T2OfflineTest(unittest.TestCase):
             patch("app.services.asr.r2t2_engine.transcribe_segment", return_value=raw),
         ):
             result = engine.transcribe_segments(
-                [
-                    SimpleNamespace(
-                        temp_file=source.name, start_sec=0, end_sec=1, audio_data=None
-                    )
-                ],
+                [SimpleNamespace(temp_file=source.name, start_sec=0, end_sec=1, audio_data=None)],
                 word_timestamps=True,
             )[0]
             self.assertEqual(result.text, expected)
             engine.aligner.align_transcript.assert_called_once_with(
                 audio_path=source.name, text=expected, audio=audio
             )
-            self.assertEqual(
-                "".join(word.text for word in result.word_tokens), "".join(tokens)
-            )
+            self.assertEqual("".join(word.text for word in result.word_tokens), "".join(tokens))
 
     def test_asr_chunks_keep_text_and_relative_word_times(self) -> None:
         engine = R2T2Engine.__new__(R2T2Engine)
         engine.aligner = SimpleNamespace(
-            align_transcript=Mock(
-                return_value=[{"text": "fresh", "start_ms": 200, "end_ms": 800}]
-            )
+            align_transcript=Mock(return_value=[{"text": "fresh", "start_ms": 200, "end_ms": 800}])
         )
         audio = np.zeros(16000, dtype=np.float32)
         second = np.ones(16000, dtype=np.float32)
@@ -212,9 +202,7 @@ class R2T2OfflineTest(unittest.TestCase):
                 ),
             ) as recognize,
         ):
-            paths = [
-                str(Path(directory) / name) for name in ("first.wav", "second.wav")
-            ]
+            paths = [str(Path(directory) / name) for name in ("first.wav", "second.wav")]
             for path in paths:
                 Path(path).touch()
             segments = [
@@ -233,9 +221,7 @@ class R2T2OfflineTest(unittest.TestCase):
                     audio_data=None,
                 ),
             ]
-            results = engine.transcribe_segments(
-                segments, hotwords="Ada", word_timestamps=True
-            )
+            results = engine.transcribe_segments(segments, hotwords="Ada", word_timestamps=True)
             self.assertEqual([r.text for r in results], ["fresh!", "second."])
             self.assertEqual([r.speaker_id for r in results], [None, None])
             self.assertEqual(results[0].start_time, 5.0)
@@ -261,9 +247,7 @@ class R2T2OfflineTest(unittest.TestCase):
         engine.aligner = Mock()
         with (
             tempfile.NamedTemporaryFile() as source,
-            patch(
-                "app.services.asr.r2t2_engine._load_audio", return_value=np.zeros(16000)
-            ),
+            patch("app.services.asr.r2t2_engine._load_audio", return_value=np.zeros(16000)),
             patch(
                 "app.services.asr.r2t2_engine.transcribe_segment",
                 return_value="Fresh text.",

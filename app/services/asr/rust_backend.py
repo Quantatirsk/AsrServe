@@ -82,9 +82,7 @@ def _load_library() -> ctypes.CDLL:
             function.argtypes = arguments
             function.restype = result
     except AttributeError as exc:
-        raise RuntimeError(
-            "Rust library ABI is outdated; run scripts/build-rust.sh"
-        ) from exc
+        raise RuntimeError("Rust library ABI is outdated; run scripts/build-rust.sh") from exc
     return lib
 
 
@@ -94,9 +92,7 @@ class RustBackend:
         self.model_path = str(
             resolve_huggingface_snapshot_dir(configured)
             if configured
-            else snapshot_download(
-                MODEL_REPOSITORY, revision=MODEL_REVISION, local_files_only=True
-            )
+            else snapshot_download(MODEL_REPOSITORY, revision=MODEL_REVISION, local_files_only=True)
         )
         self._lib = _load_library()
         self._lock = threading.Lock()
@@ -122,10 +118,7 @@ class RustBackend:
         max_tokens: int,
     ) -> NativeGeneration:
         samples = np.ascontiguousarray(audio, dtype=np.float32)
-        if (
-            samples.ndim != 1
-            or not 0 < samples.size <= OFFLINE_MAX_SAMPLES + OFFLINE_TAIL_SAMPLES
-        ):
+        if samples.ndim != 1 or not 0 < samples.size <= OFFLINE_MAX_SAMPLES + OFFLINE_TAIL_SAMPLES:
             raise ValueError("Audio must be nonempty mono 16 kHz PCM")
         if not np.isfinite(samples).all():
             raise ValueError("Audio samples must be finite")
@@ -159,9 +152,7 @@ class RustBackend:
         ):
             raise RuntimeError("Invalid Rust generation result")
         ids = result.get("token_ids")
-        if not isinstance(ids, list) or any(
-            type(token) is not int or token < 0 for token in ids
-        ):
+        if not isinstance(ids, list) or any(type(token) is not int or token < 0 for token in ids):
             raise RuntimeError("Invalid Rust generation token IDs")
         return NativeGeneration(ids, result["finish_reason"])
 
@@ -194,17 +185,11 @@ class RustForcedAligner(RustBackend):
         if not isinstance(result, list) or not result:
             raise RuntimeError("Rust forced aligner returned no timestamps")
         duration_ms = (
-            len(audio) * 1000 / 16000
-            if audio is not None
-            else sf.info(audio_path).duration * 1000
+            len(audio) * 1000 / 16000 if audio is not None else sf.info(audio_path).duration * 1000
         )
         try:
-            timestamps = [
-                float(item[key]) for item in result for key in ("start_ms", "end_ms")
-            ]
-            if any(
-                not isinstance(item["text"], str) or not item["text"] for item in result
-            ):
+            timestamps = [float(item[key]) for item in result for key in ("start_ms", "end_ms")]
+            if any(not isinstance(item["text"], str) or not item["text"] for item in result):
                 raise ValueError("Empty alignment unit")
             if [item["text"] for item in result] != units:
                 raise ValueError("Forced alignment units differ from transcript")

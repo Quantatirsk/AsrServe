@@ -15,17 +15,13 @@ def assign_one(result, activity):
     return assign_speakers([result], activity)
 
 
-def diarization(
-    spans: list[tuple[float, float, str]], duration: float = 5.0
-) -> DiarizationResult:
+def diarization(spans: list[tuple[float, float, str]], duration: float = 5.0) -> DiarizationResult:
     labels = list(dict.fromkeys(speaker for _, _, speaker in spans))
     probabilities = np.zeros((int(duration * 100), 8), dtype=np.float32)
     for start, end, speaker in spans:
         probabilities[int(start * 100) : int(end * 100), labels.index(speaker)] = 0.9
     return DiarizationResult(
-        segments=[
-            SpeakerSegment(start, end, speaker, 0.9) for start, end, speaker in spans
-        ],
+        segments=[SpeakerSegment(start, end, speaker, 0.9) for start, end, speaker in spans],
         probabilities=probabilities,
         frame_seconds=0.01,
         duration=duration,
@@ -45,17 +41,12 @@ def transcript(
         text=text,
         start_time=start,
         end_time=end,
-        word_tokens=[
-            WordToken(unit, lower, upper)
-            for unit, (lower, upper) in zip(units, timings)
-        ],
+        word_tokens=[WordToken(unit, lower, upper) for unit, (lower, upper) in zip(units, timings)],
     )
 
 
 class SpeakerAttributionTest(unittest.TestCase):
-    def assert_preserved(
-        self, original: ASRSegmentResult, output: list[ASRSegmentResult]
-    ) -> None:
+    def assert_preserved(self, original: ASRSegmentResult, output: list[ASRSegmentResult]) -> None:
         self.assertEqual("".join(segment.text for segment in output), original.text)
         actual = [
             (
@@ -75,31 +66,23 @@ class SpeakerAttributionTest(unittest.TestCase):
             for word in original.word_tokens or []
         ]
         self.assertEqual([item[0] for item in actual], [item[0] for item in expected])
-        np.testing.assert_allclose(
-            [item[1:] for item in actual], [item[1:] for item in expected]
-        )
+        np.testing.assert_allclose([item[1:] for item in actual], [item[1:] for item in expected])
         for segment in output:
             for word in segment.word_tokens or []:
                 self.assertGreaterEqual(word.start_time, 0)
-                self.assertLessEqual(
-                    word.end_time, segment.end_time - segment.start_time + 1e-6
-                )
+                self.assertLessEqual(word.end_time, segment.end_time - segment.start_time + 1e-6)
 
     def test_single_speaker_preserves_punctuation_spaces_and_numbers(self) -> None:
         text = "  \u4eca\u5929\uff0c Qwen3 it's 12.5%: caf\u00e9!\n"
         units = split_alignment_units(text)
-        original = transcript(
-            text, [(i * 0.3, i * 0.3 + 0.2) for i in range(len(units))]
-        )
+        original = transcript(text, [(i * 0.3, i * 0.3 + 0.2) for i in range(len(units))])
         output = assign_one(original, diarization([(0, 5, "speaker-1")]))
         self.assert_preserved(original, output)
         self.assertEqual(len(output), 1)
         self.assertEqual(output[0].speaker_id, "speaker-1")
 
     def test_short_interjection_survives_and_times_are_rebased(self) -> None:
-        original = transcript(
-            "Start. Yes! Continue.", [(0, 0.8), (1, 1.1), (1.2, 2)], 10, 13
-        )
+        original = transcript("Start. Yes! Continue.", [(0, 0.8), (1, 1.1), (1.2, 2)], 10, 13)
         output = assign_one(
             original,
             diarization(
@@ -116,9 +99,7 @@ class SpeakerAttributionTest(unittest.TestCase):
             [segment.speaker_id for segment in output],
             ["speaker-1", "speaker-2", "speaker-1"],
         )
-        self.assertEqual(
-            [segment.text for segment in output], ["Start. ", "Yes! ", "Continue."]
-        )
+        self.assertEqual([segment.text for segment in output], ["Start. ", "Yes! ", "Continue."])
         self.assertAlmostEqual(output[1].word_tokens[0].start_time, 0)
         self.assertAlmostEqual(output[1].word_tokens[0].end_time, 0.1)
 
@@ -133,9 +114,7 @@ class SpeakerAttributionTest(unittest.TestCase):
 
     def test_switch_inside_word_uses_greatest_coverage(self) -> None:
         original = transcript("Across.", [(0, 1)])
-        output = assign_one(
-            original, diarization([(0, 0.6, "speaker-1"), (0.6, 1, "speaker-2")])
-        )
+        output = assign_one(original, diarization([(0, 0.6, "speaker-1"), (0.6, 1, "speaker-2")]))
         self.assertEqual(output[0].speaker_id, "speaker-1")
         self.assert_preserved(original, output)
 
@@ -200,9 +179,7 @@ class SpeakerAttributionTest(unittest.TestCase):
         ]
         activity = diarization([(0, 1, "A"), (90, 95, "B")], 95)
         result = consolidate_speaker_turns(assign_speakers(source, activity))
-        self.assertEqual(
-            [(r.text, r.speaker_id) for r in result], [("前尾", "A"), ("新", "B")]
-        )
+        self.assertEqual([(r.text, r.speaker_id) for r in result], [("前尾", "A"), ("新", "B")])
 
     def test_uncovered_opening_uses_nearest_speaker(self) -> None:
         original = transcript("开始", [(0, 0.5), (0.5, 1)])
@@ -211,16 +188,10 @@ class SpeakerAttributionTest(unittest.TestCase):
         self.assert_preserved(original, output)
 
     def test_zero_duration_word_at_boundary_and_recording_end(self) -> None:
-        original = transcript(
-            "Before. After. End.", [(0.5, 0.5), (1, 1), (2, 2)], end=2
-        )
-        output = assign_one(
-            original, diarization([(0, 1, "speaker-1"), (1, 2, "speaker-2")], 2)
-        )
+        original = transcript("Before. After. End.", [(0.5, 0.5), (1, 1), (2, 2)], end=2)
+        output = assign_one(original, diarization([(0, 1, "speaker-1"), (1, 2, "speaker-2")], 2))
         self.assert_preserved(original, output)
-        self.assertEqual(
-            [segment.speaker_id for segment in output], ["speaker-1", "speaker-2"]
-        )
+        self.assertEqual([segment.speaker_id for segment in output], ["speaker-1", "speaker-2"])
 
     def test_recording_labels_are_preserved_across_asr_chunks(self) -> None:
         speakers = diarization(
@@ -238,18 +209,14 @@ class SpeakerAttributionTest(unittest.TestCase):
 
 
 def turn(text: str, start: float, end: float, speaker: str | None) -> ASRSegmentResult:
-    return ASRSegmentResult(
-        text, start, end, speaker, [WordToken(text.strip(), 0, end - start)]
-    )
+    return ASRSegmentResult(text, start, end, speaker, [WordToken(text.strip(), 0, end - start)])
 
 
 class SpeakerTurnConsolidationTest(unittest.TestCase):
     def assert_preserved(
         self, source: list[ASRSegmentResult], output: list[ASRSegmentResult]
     ) -> None:
-        self.assertEqual(
-            "".join(s.text for s in source), "".join(s.text for s in output)
-        )
+        self.assertEqual("".join(s.text for s in source), "".join(s.text for s in output))
         before = [
             (w.text, s.start_time + w.start_time, s.start_time + w.end_time)
             for s in source
@@ -355,9 +322,7 @@ class SpeakerTurnConsolidationTest(unittest.TestCase):
             ],
         ]
         for source in cases:
-            with self.subTest(
-                timeline=[(s.start_time, s.end_time, s.speaker_id) for s in source]
-            ):
+            with self.subTest(timeline=[(s.start_time, s.end_time, s.speaker_id) for s in source]):
                 result = consolidate_speaker_turns(source)
                 self.assertEqual(result, source)
                 self.assert_preserved(source, result)

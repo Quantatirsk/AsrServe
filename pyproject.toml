@@ -104,13 +104,6 @@ requires-dist = []
 
 [tool.ty]
 # Type checking configuration
-exclude = [
-    ".git",
-    ".venv",
-    "vendor",
-    "build",
-    "dist",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

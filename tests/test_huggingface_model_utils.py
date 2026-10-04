@@ -53,10 +53,7 @@ def test_huggingface_cache_priority_and_snapshot_resolution() -> None:
             XDG_CACHE_HOME=str(Path(temp_dir) / "ignored-xdg"),
         ):
             assert get_huggingface_cache_root() == cache_root
-            assert (
-                get_huggingface_model_cache_dir("netease-youdao/Confucius4-R2T2")
-                == model_dir
-            )
+            assert get_huggingface_model_cache_dir("netease-youdao/Confucius4-R2T2") == model_dir
             assert (
                 find_huggingface_snapshot_dir("netease-youdao/Confucius4-R2T2")
                 == snapshot_dir.resolve()

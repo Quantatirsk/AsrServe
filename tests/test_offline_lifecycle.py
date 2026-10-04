@@ -18,8 +18,7 @@ from app.services.asr.offline_transcription_service import (
     OfflineTranscriptionService,
 )
 from app.services.asr.runtime.router import RuntimeRouter
-from app.utils.audio import NormalizedAudio
-from app.utils.audio import normalize_audio_for_asr
+from app.utils.audio import NormalizedAudio, normalize_audio_for_asr
 
 with (
     patch(
@@ -72,9 +71,7 @@ async def request(
     assert messages[-1]["type"] == "http.response.body"
     assert messages[-1].get("more_body", False) is False
     status = next(
-        message["status"]
-        for message in messages
-        if message["type"] == "http.response.start"
+        message["status"] for message in messages if message["type"] == "http.response.start"
     )
     payload = b"".join(message.get("body", b"") for message in messages)
     return status, payload
@@ -124,9 +121,7 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 raise ValueError("Inference failed")
             return ASRFullResult(
                 text="recognized text",
-                segments=[
-                    ASRSegmentResult("recognized text", 0.0, 2.0 * timestamp_scale)
-                ],
+                segments=[ASRSegmentResult("recognized text", 0.0, 2.0 * timestamp_scale)],
                 duration=2.0 * timestamp_scale,
             )
 
@@ -137,9 +132,7 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 "app.services.audio.audio_service.normalize_audio_for_asr",
                 side_effect=normalize,
             ),
-            patch(
-                "app.services.audio.audio_service.get_audio_duration", return_value=2.0
-            ),
+            patch("app.services.audio.audio_service.get_audio_duration", return_value=2.0),
             patch(
                 "app.services.audio.audio_service.cleanup_temp_file",
                 side_effect=cleanup,
@@ -183,9 +176,7 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(list(Path(self.directory.name).iterdir()))
 
     async def test_success_upload_priority_and_timestamp_scale(self) -> None:
-        with patch(
-            "app.services.audio.audio_service.download_audio_from_url"
-        ) as download:
+        with patch("app.services.audio.audio_service.download_audio_from_url") as download:
             task = await self.start(audio_address="https://example.test/audio.wav")
             result = await task
         download.assert_not_called()
@@ -235,15 +226,15 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_upload_does_not_fall_back_to_url(self) -> None:
         from app.core.exceptions import InvalidMessageException
 
-        with patch(
-            "app.services.audio.audio_service.download_audio_from_url"
-        ) as download:
-            with self.assertRaises(InvalidMessageException):
-                await self.service.start_transcription(
-                    audio_data=b"",
-                    audio_address="https://example.test/audio.wav",
-                    options=OfflineTranscriptionOptions(),
-                )
+        with (
+            patch("app.services.audio.audio_service.download_audio_from_url") as download,
+            self.assertRaises(InvalidMessageException),
+        ):
+            await self.service.start_transcription(
+                audio_data=b"",
+                audio_address="https://example.test/audio.wav",
+                options=OfflineTranscriptionOptions(),
+            )
         download.assert_not_called()
         self.assert_cleaned_once()
 
@@ -261,12 +252,14 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assert_cleaned_once()
 
     async def test_preparation_failure_cleans_both_files(self) -> None:
-        with patch(
-            "app.services.audio.audio_service.get_audio_duration",
-            side_effect=ValueError("Decode failed"),
+        with (
+            patch(
+                "app.services.audio.audio_service.get_audio_duration",
+                side_effect=ValueError("Decode failed"),
+            ),
+            self.assertRaisesRegex(ValueError, "Decode failed"),
         ):
-            with self.assertRaisesRegex(ValueError, "Decode failed"):
-                await self.start()
+            await self.start()
         self.assert_cleaned_once()
 
     async def test_inference_failure_cleans_files(self) -> None:
@@ -348,9 +341,7 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(all(not Path(path).exists() for path in waiting_paths))
         finally:
             self.inference_release.set()
-            await asyncio.gather(
-                first, *([second] if second else []), return_exceptions=True
-            )
+            await asyncio.gather(first, *([second] if second else []), return_exceptions=True)
         self.assert_cleaned_once()
 
     async def test_stream_disconnect_drains_owned_task(self) -> None:
@@ -467,22 +458,16 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(openai_compatible, "HEARTBEAT_INTERVAL_SECONDS", 0.001):
             response_task = asyncio.create_task(
-                response(
-                    {"type": "http", "asgi": {"spec_version": "2.4"}}, receive, send
-                )
+                response({"type": "http", "asgi": {"spec_version": "2.4"}}, receive, send)
             )
             try:
                 await asyncio.wait_for(send_failed.wait(), 1)
                 await asyncio.sleep(0.01)
-                self.assertFalse(
-                    response_task.done(), "Response abandoned its inference task"
-                )
+                self.assertFalse(response_task.done(), "Response abandoned its inference task")
                 self.assertTrue(all(Path(path).exists() for path in self.paths))
             finally:
                 self.inference_release.set()
-                outcomes = await asyncio.gather(
-                    response_task, task, return_exceptions=True
-                )
+                outcomes = await asyncio.gather(response_task, task, return_exceptions=True)
         self.assertIsInstance(outcomes[0], ClientDisconnect)
         self.assertTrue(task.cancelled())
         self.assert_cleaned_once()
@@ -493,10 +478,10 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         app = FastAPI()
         app.include_router(openai_compatible.router)
         body = (
-            '--audio-test\r\nContent-Disposition: form-data; name="response_format"\r\n\r\njson'
-            '\r\n--audio-test\r\nContent-Disposition: form-data; name="file"; filename="sample.wav"'
-            "\r\nContent-Type: audio/wav\r\n\r\naudio\r\n--audio-test--\r\n"
-        ).encode()
+            b'--audio-test\r\nContent-Disposition: form-data; name="response_format"\r\n\r\njson'
+            b'\r\n--audio-test\r\nContent-Disposition: form-data; name="file"; filename="sample.wav"'
+            b"\r\nContent-Type: audio/wav\r\n\r\naudio\r\n--audio-test--\r\n"
+        )
         self.inference_error = True
         with patch.object(
             openai_compatible,
@@ -554,11 +539,11 @@ class AudioNormalizationOwnershipTests(unittest.TestCase):
                 output.write_bytes(b"partial")
                 raise ValueError("Conversion failed")
 
-            with patch(
-                "app.utils.audio.convert_audio_to_wav", side_effect=fail_conversion
+            with (
+                patch("app.utils.audio.convert_audio_to_wav", side_effect=fail_conversion),
+                self.assertRaisesRegex(Exception, "Conversion failed"),
             ):
-                with self.assertRaisesRegex(Exception, "Conversion failed"):
-                    normalize_audio_for_asr(str(original))
+                normalize_audio_for_asr(str(original))
             self.assertEqual(list(Path(directory).iterdir()), [original])
 
 

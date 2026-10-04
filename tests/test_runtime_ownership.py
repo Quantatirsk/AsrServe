@@ -17,7 +17,6 @@ from app.services.asr.r2t2_engine import R2T2Engine
 from app.services.asr.runtime.router import (
     RuntimeRouter,
 )
-
 from app.utils.audio_splitter import AudioSegment
 from app.utils.speaker_diarizer import DiarizationResult
 
@@ -31,9 +30,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         punctuation.start()
         self.addCleanup(punctuation.stop)
         manager = SimpleNamespace(create_engine=lambda _: object())
-        patcher = patch(
-            "app.services.asr.runtime.router.get_model_manager", return_value=manager
-        )
+        patcher = patch("app.services.asr.runtime.router.get_model_manager", return_value=manager)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -44,9 +41,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         loop = asyncio.get_running_loop()
 
         class Engine:
-            def transcribe_long_audio(
-                self, *, audio_path: str, **kwargs: object
-            ) -> ASRFullResult:
+            def transcribe_long_audio(self, *, audio_path: str, **kwargs: object) -> ASRFullResult:
                 if audio_path == "first":
                     loop.call_soon_threadsafe(entered.set)
                     if not release.wait(3):
@@ -64,9 +59,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 return_value=Engine(),
             ),
         ):
-            first = asyncio.create_task(
-                router.run_offline(OfflineASRRequest("model", "first"))
-            )
+            first = asyncio.create_task(router.run_offline(OfflineASRRequest("model", "first")))
             second = None
             try:
                 await asyncio.wait_for(entered.wait(), 1)
@@ -77,17 +70,11 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
                     router.run_offline(OfflineASRRequest("model", "second"))
                 )
                 await asyncio.sleep(0.03)
-                self.assertFalse(
-                    second_entered.is_set(), "Cancelled worker's engine was reused"
-                )
-                self.assertFalse(
-                    first.done(), "Cancellation escaped before worker completion"
-                )
+                self.assertFalse(second_entered.is_set(), "Cancelled worker's engine was reused")
+                self.assertFalse(first.done(), "Cancellation escaped before worker completion")
             finally:
                 release.set()
-                await asyncio.gather(
-                    first, *([second] if second else []), return_exceptions=True
-                )
+                await asyncio.gather(first, *([second] if second else []), return_exceptions=True)
             self.assertTrue(first.cancelled())
             self.assertEqual(second.result().text, "second")
 
@@ -95,12 +82,10 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         router = RuntimeRouter()
         with (
             patch.object(router, "resolve_model_id", return_value="confucius4-r2t2"),
-            patch.object(
-                router._manager, "create_engine", side_effect=ValueError("Load failed")
-            ),
+            patch.object(router._manager, "create_engine", side_effect=ValueError("Load failed")),
+            self.assertRaises(ValueError),
         ):
-            with self.assertRaises(ValueError):
-                router.warmup_model("model")
+            router.warmup_model("model")
         self.assertEqual(router.get_loaded_model_ids(), [])
 
     async def test_cancelled_diarized_pipeline_keeps_chunks_until_worker_finishes(
@@ -152,9 +137,7 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
         ):
             source = Path(directory) / "source.wav"
             source.touch()
-            task = asyncio.create_task(
-                router.run_offline(OfflineASRRequest("model", str(source)))
-            )
+            task = asyncio.create_task(router.run_offline(OfflineASRRequest("model", str(source))))
             try:
                 await asyncio.wait_for(entered.wait(), 1)
                 task.cancel()
@@ -184,16 +167,12 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 "app.utils.audio_splitter.AudioSplitter.split_audio_file",
                 return_value=[segment],
             ),
+            prepare_long_audio(str(source), False, "model") as audio,
         ):
-            with prepare_long_audio(str(source), False, "model") as audio:
-                result = audio.finish(
-                    [
-                        ASRSegmentResult(
-                            "word", 0, 1, word_tokens=[WordToken("word", 0.1, 0.2)]
-                        )
-                    ],
-                    2.0,
-                )
+            result = audio.finish(
+                [ASRSegmentResult("word", 0, 1, word_tokens=[WordToken("word", 0.1, 0.2)])],
+                2.0,
+            )
         self.assertEqual(result.duration, 4.0)
         self.assertEqual(result.segments[0].start_time, 2.0)
         self.assertEqual(result.segments[0].end_time, 4.0)
@@ -221,10 +200,10 @@ class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 "app.utils.audio_splitter.AudioSplitter.split_audio_file",
                 side_effect=split,
             ),
+            self.assertRaisesRegex(ValueError, "Decode failed"),
         ):
-            with self.assertRaisesRegex(ValueError, "Decode failed"):
-                with prepare_long_audio(str(source), False, "model"):
-                    self.fail("Preparation should fail")
+            with prepare_long_audio(str(source), False, "model"):
+                self.fail("Preparation should fail")
         self.assertEqual(list(Path(directory).iterdir()), [source])
 
 

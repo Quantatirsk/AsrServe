@@ -1,17 +1,16 @@
-# -*- coding: utf-8 -*-
 """
 安全相关功能
 包含鉴权、token验证等安全功能
 """
 
-from typing import Optional
 from fastapi import Request
+
 from .config import settings
 
 AUTH_OPTIONAL_PLACEHOLDER = "optional"
 
 
-def normalize_token(token: Optional[str]) -> Optional[str]:
+def normalize_token(token: str | None) -> str | None:
     """将 token 归一化为非空字符串或 None。"""
     if token is None:
         return None
@@ -20,7 +19,7 @@ def normalize_token(token: Optional[str]) -> Optional[str]:
     return normalized or None
 
 
-def get_expected_api_key(expected_token: Optional[str] = None) -> Optional[str]:
+def get_expected_api_key(expected_token: str | None = None) -> str | None:
     """获取归一化后的期望 API_KEY。"""
     if expected_token is not None:
         return normalize_token(expected_token)
@@ -52,7 +51,7 @@ def mask_sensitive_data(
     return f"{prefix}{mask}{suffix}"
 
 
-def validate_token_value(token: Optional[str], expected_token: Optional[str] = None) -> bool:
+def validate_token_value(token: str | None, expected_token: str | None = None) -> bool:
     """验证访问令牌
 
     Args:
@@ -81,7 +80,7 @@ def validate_token_value(token: Optional[str], expected_token: Optional[str] = N
     return True
 
 
-def extract_bearer_token(request: Request) -> Optional[str]:
+def extract_bearer_token(request: Request) -> str | None:
     """从 Authorization: Bearer 提取 token。"""
     auth_header = request.headers.get("Authorization")
     if not auth_header:
@@ -93,17 +92,15 @@ def extract_bearer_token(request: Request) -> Optional[str]:
     return normalize_token(value)
 
 
-def extract_websocket_token(websocket) -> Optional[str]:
+def extract_websocket_token(websocket) -> str | None:
     """从 WebSocket 连接中提取 token；浏览器无法设置头部，可用 ?token=。"""
-    return extract_bearer_token(websocket) or normalize_token(
-        websocket.query_params.get("token")
-    )
+    return extract_bearer_token(websocket) or normalize_token(websocket.query_params.get("token"))
 
 
 def _validate_resolved_token(
-    token: Optional[str],
+    token: str | None,
     missing_message: str,
-    expected_token: Optional[str] = None,
+    expected_token: str | None = None,
 ) -> tuple[bool, str]:
     """统一 token 校验逻辑。"""
     expected = get_expected_api_key(expected_token)
@@ -124,9 +121,7 @@ def _validate_resolved_token(
 
 def validate_token(request: Request) -> tuple[bool, str]:
     """验证 Authorization: Bearer。"""
-    return _validate_resolved_token(
-        extract_bearer_token(request), "缺少Authorization Bearer头部"
-    )
+    return _validate_resolved_token(extract_bearer_token(request), "缺少Authorization Bearer头部")
 
 
 def validate_websocket_token(websocket) -> tuple[bool, str]:

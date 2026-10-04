@@ -76,9 +76,7 @@ class SingleContainerTest(unittest.TestCase):
         ]:
             response = io.BytesIO(body)
             response.status = 200
-            with patch.object(
-                launcher.urllib.request, "urlopen", return_value=response
-            ):
+            with patch.object(launcher.urllib.request, "urlopen", return_value=response):
                 self.assertEqual(launcher.healthy("http://test", "ready"), expected)
 
     def test_deployment_preserves_gpu_and_memory_budgets(self):
@@ -109,9 +107,7 @@ class SingleContainerTest(unittest.TestCase):
                         ),
                     ),
                 ):
-                    self.assertEqual(
-                        launcher.main(), 0 if engine_ready and api_ready else 1
-                    )
+                    self.assertEqual(launcher.main(), 0 if engine_ready and api_ready else 1)
 
     def test_missing_cuda_prevents_model_download_and_processes(self):
         with (
@@ -150,9 +146,7 @@ class SingleContainerTest(unittest.TestCase):
         ):
             self.assertEqual(launcher.main(), 0)
             services, _ = run.call_args.args
-            self.assertEqual(
-                [service.env["DEVICE"] for service in services], ["cpu"] * 2
-            )
+            self.assertEqual([service.env["DEVICE"] for service in services], ["cpu"] * 2)
 
     def test_shutdown_before_start_creates_no_children(self):
         stop = threading.Event()
@@ -168,14 +162,12 @@ class SingleContainerTest(unittest.TestCase):
         ]:
             response = io.BytesIO(b'{"ready":true}')
             response.status = 200
-            with patch.dict(os.environ, {"API_KEY": "test-key"}):
-                with patch.object(
-                    launcher.urllib.request, "urlopen", return_value=response
-                ) as request:
-                    self.assertTrue(launcher.healthy(url, "ready"))
-                    self.assertEqual(
-                        request.call_args.args[0].get_header("Authorization"), expected
-                    )
+            with (
+                patch.dict(os.environ, {"API_KEY": "test-key"}),
+                patch.object(launcher.urllib.request, "urlopen", return_value=response) as request,
+            ):
+                self.assertTrue(launcher.healthy(url, "ready"))
+                self.assertEqual(request.call_args.args[0].get_header("Authorization"), expected)
 
     def test_failed_start_stops_container_without_starting_api(self):
         original = subprocess.Popen
@@ -219,21 +211,19 @@ class SingleContainerTest(unittest.TestCase):
         timer = threading.Timer(0.1, stop.set)
         timer.start()
         try:
-            with patch.object(launcher, "healthy", return_value=True):
-                with patch.object(
-                    launcher, "stop_child", wraps=launcher.stop_child
-                ) as shutdown:
-                    self.assertEqual(
-                        launcher.run(
-                            [self.service("engine"), self.service("api")],
-                            stop,
-                            grace_seconds=1,
-                        ),
-                        0,
-                    )
-            self.assertEqual(
-                [call.args[0] for call in shutdown.call_args_list], ["api", "engine"]
-            )
+            with (
+                patch.object(launcher, "healthy", return_value=True),
+                patch.object(launcher, "stop_child", wraps=launcher.stop_child) as shutdown,
+            ):
+                self.assertEqual(
+                    launcher.run(
+                        [self.service("engine"), self.service("api")],
+                        stop,
+                        grace_seconds=1,
+                    ),
+                    0,
+                )
+            self.assertEqual([call.args[0] for call in shutdown.call_args_list], ["api", "engine"])
             self.assertTrue(
                 all(call.args[1].poll() is not None for call in shutdown.call_args_list)
             )
@@ -241,26 +231,22 @@ class SingleContainerTest(unittest.TestCase):
             timer.cancel()
 
     def test_engine_failure_after_ready_stops_api(self):
-        with patch.object(launcher, "healthy", return_value=True):
-            with patch.object(
-                launcher, "stop_child", wraps=launcher.stop_child
-            ) as shutdown:
-                with self.assertLogs(launcher.logger, level="ERROR"):
-                    result = launcher.run(
-                        [
-                            self.service("engine", "import time; time.sleep(0.1)"),
-                            self.service("api"),
-                        ],
-                        threading.Event(),
-                        grace_seconds=1,
-                    )
+        with (
+            patch.object(launcher, "healthy", return_value=True),
+            patch.object(launcher, "stop_child", wraps=launcher.stop_child) as shutdown,
+            self.assertLogs(launcher.logger, level="ERROR"),
+        ):
+            result = launcher.run(
+                [
+                    self.service("engine", "import time; time.sleep(0.1)"),
+                    self.service("api"),
+                ],
+                threading.Event(),
+                grace_seconds=1,
+            )
         self.assertEqual(result, 1)
-        self.assertEqual(
-            [call.args[0] for call in shutdown.call_args_list], ["api", "engine"]
-        )
-        self.assertTrue(
-            all(call.args[1].poll() is not None for call in shutdown.call_args_list)
-        )
+        self.assertEqual([call.args[0] for call in shutdown.call_args_list], ["api", "engine"])
+        self.assertTrue(all(call.args[1].poll() is not None for call in shutdown.call_args_list))
 
 
 if __name__ == "__main__":

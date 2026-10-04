@@ -21,9 +21,9 @@ from .protocol import (
     MODEL_REPOSITORY,
     MODEL_REVISION,
     OFFLINE_CONCURRENCY,
+    OFFLINE_TAIL_SAMPLES,
     SAMPLE_RATE,
     StreamConfig,
-    OFFLINE_TAIL_SAMPLES,
 )
 
 WINDOW_SAMPLES = 16 * SAMPLE_RATE
@@ -75,9 +75,7 @@ class Session:
 
     def append(self, audio: np.ndarray) -> None:
         if self.size + len(audio) > WINDOW_SAMPLES:
-            self.audio[: self.size - DISCARD_SAMPLES] = self.audio[
-                DISCARD_SAMPLES : self.size
-            ]
+            self.audio[: self.size - DISCARD_SAMPLES] = self.audio[DISCARD_SAMPLES : self.size]
             self.size -= DISCARD_SAMPLES
             self.offset += DISCARD_SAMPLES
             while self.parts and self.parts[0][0] <= self.offset:
@@ -113,9 +111,7 @@ class Session:
 class Model:
     def __init__(self, max_sessions: int) -> None:
         self.device = settings.DEVICE
-        seconds = float(
-            os.getenv("R2T2_CHUNK_SECONDS", "0.64" if self.device == "cpu" else "0.16")
-        )
+        seconds = float(os.getenv("R2T2_CHUNK_SECONDS", "0.64" if self.device == "cpu" else "0.16"))
         if not math.isfinite(seconds) or not 0.08 <= seconds <= 2:
             raise ValueError("R2T2_CHUNK_SECONDS must be between 0.08 and 2 seconds")
         self.chunk_samples = round(seconds * SAMPLE_RATE)
@@ -139,16 +135,12 @@ class Model:
             self.tokenizer = self.processor.tokenizer
             max_model_len = int(os.getenv("R2T2_MAX_MODEL_LEN", "16384"))
             if max_model_len <= 4096:
-                raise ValueError(
-                    "R2T2_MAX_MODEL_LEN must exceed the offline output budget"
-                )
+                raise ValueError("R2T2_MAX_MODEL_LEN must exceed the offline output budget")
             self.engine = AsyncLLM.from_engine_args(
                 AsyncEngineArgs(
                     model=path,
                     revision=revision,
-                    gpu_memory_utilization=float(
-                        os.getenv("R2T2_GPU_MEMORY_UTILIZATION", "0.30")
-                    ),
+                    gpu_memory_utilization=float(os.getenv("R2T2_GPU_MEMORY_UTILIZATION", "0.30")),
                     max_model_len=max_model_len,
                     max_num_seqs=max_sessions + OFFLINE_CONCURRENCY,
                     max_num_batched_tokens=2048,
@@ -207,9 +199,7 @@ class Model:
                 if result is None or not result.outputs:
                     raise RuntimeError("R2T2 returned no offline output")
                 if result.outputs[0].finish_reason == "length":
-                    raise RuntimeError(
-                        "R2T2 offline decoding exceeded its token budget"
-                    )
+                    raise RuntimeError("R2T2 offline decoding exceeded its token budget")
                 prefix = (prefix + result.outputs[0].text).split("|", 1)[0].strip()
                 if TAG not in prefix:
                     raise RuntimeError("R2T2 offline output has no language header")
@@ -221,9 +211,7 @@ class Model:
                 return ""
         return prefix.split(TAG, 1)[1].strip()
 
-    async def push(
-        self, session: Session, audio: np.ndarray, *, final: bool = False
-    ) -> str:
+    async def push(self, session: Session, audio: np.ndarray, *, final: bool = False) -> str:
         session.append(audio)
         if len(audio):
             # A soft utterance boundary, not a speech filter: every input sample
@@ -238,9 +226,7 @@ class Model:
         if not final and session.samples < session.next_decode:
             # Keep pause detection at 160 ms even when CPU decoding runs less often.
             if session.has_speech and session.quiet_samples >= 2 * CHUNK_SAMPLES:
-                delta = await self.push(
-                    session, np.empty(0, dtype=np.float32), final=True
-                )
+                delta = await self.push(session, np.empty(0, dtype=np.float32), final=True)
                 session.reset_window()
                 return delta
             return ""
@@ -296,16 +282,10 @@ class Model:
                 raise RuntimeError("R2T2 final decoding exceeded its token budget")
         delta = session.commit(candidate, prefix)
         session.budget = (
-            session.base_budget
-            if delta
-            else min(session.max_budget, session.budget + 1)
+            session.base_budget if delta else min(session.max_budget, session.budget + 1)
         )
         session.steps += 1
-        if (
-            not final
-            and session.has_speech
-            and session.quiet_samples >= 2 * CHUNK_SAMPLES
-        ):
+        if not final and session.has_speech and session.quiet_samples >= 2 * CHUNK_SAMPLES:
             delta += await self.push(session, np.empty(0, dtype=np.float32), final=True)
             session.reset_window()
         return delta

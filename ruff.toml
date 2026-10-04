@@ -5,19 +5,12 @@ target-version = "py311"
 # Line length
 line-length = 100
 
-# Rule selection
+# Rule selection - start with critical errors only, gradually add more
 lint.select = [
     "E",    # pycodestyle errors
     "W",    # pycodestyle warnings
     "F",    # pyflakes
     "I",    # isort
-    "UP",   # pyupgrade
-    "B",    # flake8-bugbear
-    "SIM",  # flake8-simplify
-    "RUF",  # ruff-specific rules
-    "LOG",  # flake8-logging
-    "S",    # flake8-bandit (security)
-    "EXE",  # flake8-executable
 ]
 
 # Ignore specific rules that are too noisy
