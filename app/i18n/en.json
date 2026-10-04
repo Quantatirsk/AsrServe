@@ -1,4 +1,12 @@
 {
+  "i18n": {
+    "unsupported_locale": "Unsupported locale '{locale}', falling back to '{default}'",
+    "locale_set": "Locale set to: {locale}",
+    "locale_file_not_found": "Locale file not found: {file}",
+    "translations_loaded": "Loaded {count} translations for locale '{locale}'",
+    "load_failed": "Failed to load translations for locale '{locale}': {error}",
+    "format_failed": "Failed to format translation for key '{key}': {error}"
+  },
   "app": {
     "name": "AsrServe",
     "description": "R2T2 offline and realtime speech recognition",

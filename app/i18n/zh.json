@@ -1,4 +1,12 @@
 {
+  "i18n": {
+    "unsupported_locale": "不支持的语言 '{locale}'，回退到 '{default}'",
+    "locale_set": "语言设置为: {locale}",
+    "locale_file_not_found": "语言文件未找到: {file}",
+    "translations_loaded": "已加载 {count} 条 '{locale}' 语言的翻译",
+    "load_failed": "加载 '{locale}' 语言翻译失败: {error}",
+    "format_failed": "格式化键 '{key}' 的翻译失败: {error}"
+  },
   "app": {
     "name": "AsrServe",
     "description": "R2T2 离线和实时语音识别",

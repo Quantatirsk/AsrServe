@@ -16,7 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # 默认语言 / Default locale
-DEFAULT_LOCALE = "en"
+DEFAULT_LOCALE = "zh"
 
 # 支持的语言 / Supported locales
 SUPPORTED_LOCALES = ["en", "zh"]
@@ -48,14 +48,12 @@ def set_locale(locale: str) -> None:
     global _current_locale, _translations
 
     if locale not in SUPPORTED_LOCALES:
-        logger.warning(f"不支持的语言 '{locale}'，回退到 '{DEFAULT_LOCALE}'")
-        # Unsupported locale '{locale}', falling back to '{DEFAULT_LOCALE}'
+        logger.warning(t("i18n.unsupported_locale", locale=locale, default=DEFAULT_LOCALE))
         locale = DEFAULT_LOCALE
 
     _current_locale = locale
     _translations = _load_translations(locale)
-    logger.info(f"语言设置为: {locale}")
-    # logger.info(f"Locale set to: {locale}")
+    logger.info(t("i18n.locale_set", locale=locale))
 
 
 def _load_translations(locale: str) -> dict[str, Any]:
@@ -71,19 +69,16 @@ def _load_translations(locale: str) -> dict[str, Any]:
     locale_file = LOCALE_DIR / f"{locale}.json"
 
     if not locale_file.exists():
-        logger.warning(f"语言文件未找到: {locale_file}")
-        # logger.warning(f"Locale file not found: {locale_file}")
+        logger.warning(t("i18n.locale_file_not_found", file=str(locale_file)))
         return {}
 
     try:
         with open(locale_file, "r", encoding="utf-8") as f:
             translations = json.load(f)
-        logger.info(f"已加载 {len(translations)} 条 '{locale}' 语言的翻译")
-        # logger.info(f"Loaded {len(translations)} translations for locale '{locale}'")
+        logger.info(t("i18n.translations_loaded", count=len(translations), locale=locale))
         return translations
     except Exception as e:
-        logger.error(f"加载 '{locale}' 语言翻译失败: {e}")
-        # logger.error(f"Failed to load translations for locale '{locale}': {e}")
+        logger.error(t("i18n.load_failed", locale=locale, error=e))
         return {}
 
 
@@ -116,8 +111,7 @@ def translate(key: str, **kwargs: Any) -> str:
             try:
                 return current.format(**kwargs)
             except (KeyError, IndexError, ValueError) as e:
-                logger.warning(f"格式化键 '{key}' 的翻译失败: {e}")
-                # logger.warning(f"Failed to format translation for key '{key}': {e}")
+                logger.warning(t("i18n.format_failed", key=key, error=e))
                 return current
         return current
 
@@ -139,8 +133,8 @@ def init_i18n() -> None:
 
     读取 ASR_LOCALE 环境变量来确定语言
     Reads ASR_LOCALE environment variable to determine locale.
-    如果未设置或无效则回退到 'en'
-    Falls back to 'en' if not set or invalid.
+    如果未设置或无效则回退到 'zh'
+    Falls back to 'zh' if not set or invalid.
     """
     locale = os.getenv("ASR_LOCALE", DEFAULT_LOCALE)
     set_locale(locale)
