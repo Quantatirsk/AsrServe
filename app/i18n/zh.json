@@ -1,0 +1,80 @@
+{
+  "app": {
+    "name": "AsrServe",
+    "description": "R2T2 离线和实时语音识别",
+    "ready": "R2T2 和 Nemotron 就绪; alignment_mode={alignment_mode}",
+    "temp_cleaned": "已清理 {count} 个过期临时文件",
+    "temp_cleanup_error": "清理临时目录时出错: {error}"
+  },
+  "audio": {
+    "url_empty": "URL不能为空",
+    "file_too_large": "音频文件太大，最大支持{max_size_mb}MB",
+    "download_failed": "下载音频文件失败: {error}",
+    "save_failed": "保存音频文件失败: {error}",
+    "load_failed": "加载音频文件失败: {error}",
+    "duration_failed": "获取音频时长失败: {error}",
+    "ffprobe_failed": "ffprobe 获取容器时长失败: {error}",
+    "conversion_failed": "音频转换失败: {error}"
+  },
+  "splitter": {
+    "total_duration": "音频总时长: {duration:.2f}秒",
+    "no_split_needed": "音频时长在限制内，无需分割",
+    "splitting": "开始切分音频并保存临时文件...",
+    "segment_progress": "分段 {current}/{total}: ",
+    "segment_duration": "(时长: {duration:.2f}s)",
+    "split_complete": "音频切分完成，共 {count} 个分段",
+    "split_failed": "音频分割失败: {error}",
+    "resplit_complete": "重分段完成: 来源=Nemotron, 原始语音区间={original}, 输出={output}"
+  },
+  "api": {
+    "transcription_received": "[OpenAI API] 收到转写请求: format={format}, speaker_diarization={diarization}, word_level={word_timestamps}, audio_address={has_address}",
+    "sending_heartbeat": "[OpenAI API] 发送响应心跳: format={format}, heartbeat_count={count}",
+    "transcription_complete": "[OpenAI API] 识别完成: {chars} 字符",
+    "preparing_response": "[OpenAI API] 准备发送 JSON 响应: format={format}, segments={segments}, words={words}, payload_bytes={bytes}, heartbeat_count={count}",
+    "http_error": "[OpenAI API] HTTP异常: {detail}",
+    "transcription_failed": "[OpenAI API] 转写失败: {error}",
+    "models_error": "获取模型列表失败: {error}",
+    "missing_input": "必须提供 file（上传文件）或 audio_address（音频 URL）其中之一",
+    "auth_failed": "认证失败"
+  },
+  "health": {
+    "healthy": "healthy",
+    "unhealthy": "unhealthy",
+    "error": "error",
+    "running": "ASR 服务运行正常",
+    "model_not_loaded": "ASR 模型未加载"
+  },
+  "realtime": {
+    "page_title": "实时转写 · AsrServe",
+    "page_heading": "实时转写",
+    "page_description": "开启麦克风，即时呈现文字。中英文自动识别，无需切换语言。",
+    "api_key_label": "API Key（服务开启鉴权时填写）",
+    "api_key_placeholder": "可选",
+    "start_button": "开始录音",
+    "stop_button": "结束录音",
+    "copy_button": "复制文字",
+    "status_ready": "准备就绪",
+    "status_connecting": "正在连接…",
+    "status_listening": "正在聆听 · 自动识别中英文",
+    "status_complete": "转写完成",
+    "status_copy_done": "已复制",
+    "status_copy_error": "请选中文字后复制。",
+    "status_closed": "连接已关闭",
+    "status_timeout": "连接超时，请重试。",
+    "status_failed": "连接失败，请检查服务和 API Key。",
+    "status_network_slow": "网络过慢，请重新连接。",
+    "status_finalizing": "正在补齐末尾文字…",
+    "status_finalizing_timeout": "转写结束超时，请重试。",
+    "placeholder_text": "转写文字会出现在这里…",
+    "footer": "R2T2 · 每个连接独立转写 · 停止录音后会补齐末尾文字",
+    "mic_error": "请通过 HTTPS 反向代理或 localhost 打开页面以使用麦克风。"
+  },
+  "errors": {
+    "invalid_parameter": "参数无效",
+    "authentication_failed": "认证失败",
+    "server_error": "服务器错误",
+    "client_error": "客户端错误",
+    "not_found": "未找到",
+    "internal_error": "内部服务器错误"
+  }
+}

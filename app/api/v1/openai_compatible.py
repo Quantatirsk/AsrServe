@@ -26,6 +26,7 @@ from ...core.exceptions import (
     create_error_response,
     get_http_status_code,
 )
+from ...core.i18n import t
 from ...services.asr.model_selection import (
     get_offline_model_ids,
 )
@@ -381,7 +382,7 @@ def create_heartbeat_streaming_response(
             yield b" \n"
 
         asr_result = await inference_task
-        logger.info(f"[OpenAI API] 识别完成: {len(asr_result.text)} 字符")
+        logger.info(t("api.transcription_complete", chars=len(asr_result.text)))
 
         payload, segments_count, words_count = build_transcription_payload(
             response_format=response_format,
@@ -432,7 +433,7 @@ async def list_models(request: Request):
             data=[ModelObject(id=model_id) for model_id in get_offline_model_ids()]
         )
     except Exception as e:
-        logger.error(f"获取模型列表失败: {e}")
+        logger.error(t("api.models_error", error=e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -665,7 +666,7 @@ async def create_transcription(
 
     except HTTPException as http_exc:
         # 将 HTTPException 转换为标准错误格式
-        logger.error(f"[OpenAI API] HTTP异常: {http_exc.detail}")
+        logger.error(t("api.http_error", detail=http_exc.detail))
 
         response_data = create_error_response(
             error_code=(
@@ -677,7 +678,7 @@ async def create_transcription(
         )
         return JSONResponse(content=response_data, status_code=http_exc.status_code)
     except Exception as e:
-        logger.error(f"[OpenAI API] 转写失败: {e}")
+        logger.error(t("api.transcription_failed", error=e))
 
         # 使用标准错误格式
         response_data = create_error_response(

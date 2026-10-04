@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from ..core.config import settings
 from ..core.exceptions import DefaultServerErrorException
+from ..core.i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -194,11 +195,11 @@ class AudioSplitter:
             audio_data, sr = librosa.load(audio_path, sr=self.DEFAULT_SAMPLE_RATE)
             total_duration_ms = (len(audio_data) * 1000 + int(sr) - 1) // int(sr)
 
-            logger.info(f"音频总时长: {total_duration_ms / 1000:.2f}秒")
+            logger.info(t("splitter.total_duration", duration=total_duration_ms / 1000))
 
             # 检查是否需要分割
             if len(audio_data) * 1000 <= self.split_trigger_ms * int(sr):
-                logger.info("音频时长在限制内，无需分割")
+                logger.info(t("splitter.no_split_needed"))
                 return [
                     AudioSegment(
                         start_ms=0,
@@ -218,7 +219,7 @@ class AudioSplitter:
             )
 
             # 切分音频并保存到临时文件
-            logger.info("开始切分音频并保存临时文件...")
+            logger.info(t("splitter.splitting"))
             output_dir = output_dir or settings.TEMP_DIR
             os.makedirs(output_dir, exist_ok=True)
 
@@ -257,9 +258,9 @@ class AudioSplitter:
                     f"(时长: {segment.duration_sec:.2f}s)"
                 )
 
-            logger.info(f"音频切分完成，共 {len(audio_segments)} 个分段")
+            logger.info(t("splitter.split_complete", count=len(audio_segments)))
             return audio_segments
 
         except Exception as e:
-            logger.error(f"音频分割失败: {e}")
-            raise DefaultServerErrorException(f"音频分割失败: {str(e)}")
+            logger.error(t("splitter.split_failed", error=e))
+            raise DefaultServerErrorException(t("splitter.split_failed", error=str(e)))

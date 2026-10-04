@@ -1,0 +1,80 @@
+{
+  "app": {
+    "name": "AsrServe",
+    "description": "R2T2 offline and realtime speech recognition",
+    "ready": "R2T2 and Nemotron ready; alignment_mode={alignment_mode}",
+    "temp_cleaned": "Cleaned up {count} expired temp files",
+    "temp_cleanup_error": "Error cleaning temp directory: {error}"
+  },
+  "audio": {
+    "url_empty": "URL cannot be empty",
+    "file_too_large": "Audio file too large, max {max_size_mb}MB",
+    "download_failed": "Failed to download audio file: {error}",
+    "save_failed": "Failed to save audio file: {error}",
+    "load_failed": "Failed to load audio file: {error}",
+    "duration_failed": "Failed to get audio duration: {error}",
+    "ffprobe_failed": "ffprobe failed to get container duration: {error}",
+    "conversion_failed": "Audio conversion failed: {error}"
+  },
+  "splitter": {
+    "total_duration": "Audio total duration: {duration:.2f}s",
+    "no_split_needed": "Audio duration within limits, no splitting needed",
+    "splitting": "Starting to split audio and save temp files...",
+    "segment_progress": "Segment {current}/{total}: ",
+    "segment_duration": "(duration: {duration:.2f}s)",
+    "split_complete": "Audio splitting complete, {count} segments",
+    "split_failed": "Audio splitting failed: {error}",
+    "resplit_complete": "Resplitting complete: source=Nemotron, original speech intervals={original}, output={output}"
+  },
+  "api": {
+    "transcription_received": "[OpenAI API] Received transcription request: format={format}, speaker_diarization={diarization}, word_level={word_timestamps}, audio_address={has_address}",
+    "sending_heartbeat": "[OpenAI API] Sending response heartbeat: format={format}, heartbeat_count={count}",
+    "transcription_complete": "[OpenAI API] Transcription complete: {chars} characters",
+    "preparing_response": "[OpenAI API] Preparing to send JSON response: format={format}, segments={segments}, words={words}, payload_bytes={bytes}, heartbeat_count={count}",
+    "http_error": "[OpenAI API] HTTP exception: {detail}",
+    "transcription_failed": "[OpenAI API] Transcription failed: {error}",
+    "models_error": "Failed to get model list: {error}",
+    "missing_input": "Must provide either file (upload) or audio_address (audio URL)",
+    "auth_failed": "Invalid authentication"
+  },
+  "health": {
+    "healthy": "healthy",
+    "unhealthy": "unhealthy",
+    "error": "error",
+    "running": "ASR service is running normally",
+    "model_not_loaded": "ASR model not loaded"
+  },
+  "realtime": {
+    "page_title": "Realtime Transcription · AsrServe",
+    "page_heading": "Realtime Transcription",
+    "page_description": "Enable microphone for live transcription. Automatic Chinese/English detection, no language switching needed.",
+    "api_key_label": "API Key (if authentication is enabled)",
+    "api_key_placeholder": "Optional",
+    "start_button": "Start Recording",
+    "stop_button": "Stop Recording",
+    "copy_button": "Copy Text",
+    "status_ready": "Ready",
+    "status_connecting": "Connecting...",
+    "status_listening": "Listening · Auto-detecting Chinese/English",
+    "status_complete": "Transcription complete",
+    "status_copy_done": "Copied",
+    "status_copy_error": "Please select text and copy manually.",
+    "status_closed": "Connection closed",
+    "status_timeout": "Connection timed out, please try again.",
+    "status_failed": "Connection failed, please check service and API Key.",
+    "status_network_slow": "Network too slow, please reconnect.",
+    "status_finalizing": "Finalizing end of text...",
+    "status_finalizing_timeout": "Transcription ended timed out, please try again.",
+    "placeholder_text": "Transcribed text will appear here...",
+    "footer": "R2T2 · Independent transcription per connection · End of text finalized after stopping recording",
+    "mic_error": "Please open the page via HTTPS reverse proxy or localhost to use the microphone."
+  },
+  "errors": {
+    "invalid_parameter": "Invalid parameter",
+    "authentication_failed": "Authentication failed",
+    "server_error": "Server error",
+    "client_error": "Client error",
+    "not_found": "Not found",
+    "internal_error": "Internal server error"
+  }
+}

@@ -7,6 +7,7 @@
 from typing import Optional
 from fastapi import Request
 from .config import settings
+from .i18n import t
 
 AUTH_OPTIONAL_PLACEHOLDER = "optional"
 
@@ -125,7 +126,7 @@ def _validate_resolved_token(
 def validate_token(request: Request) -> tuple[bool, str]:
     """验证 Authorization: Bearer。"""
     return _validate_resolved_token(
-        extract_bearer_token(request), "缺少Authorization Bearer头部"
+        extract_bearer_token(request), t("errors.authentication_failed")
     )
 
 
@@ -133,5 +134,5 @@ def validate_websocket_token(websocket) -> tuple[bool, str]:
     """验证 WebSocket 连接 token（Bearer 头部或 token 查询参数）。"""
     return _validate_resolved_token(
         extract_websocket_token(websocket),
-        "缺少鉴权信息，请通过 Authorization Bearer 头部或 token 查询参数传入",
+        t("errors.authentication_failed"),
     )

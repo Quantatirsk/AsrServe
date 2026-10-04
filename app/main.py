@@ -21,6 +21,7 @@ from .core.exceptions import (
 )
 from .core.logging import setup_logging
 from .core.executor import shutdown_executor
+from .core.i18n import t
 from .api.v1 import api_router
 
 # 忽略 Pydantic V2 兼容性警告
@@ -57,9 +58,9 @@ def cleanup_temp_directory():
                         pass
 
         if cleaned_count > 0:
-            logger.info(f"已清理 {cleaned_count} 个过期临时文件")
+            logger.info(t("app.temp_cleaned", count=cleaned_count))
     except Exception as e:
-        logger.warning(f"清理临时目录时出错: {e}")
+        logger.warning(t("app.temp_cleanup_error", error=e))
 
 
 @asynccontextmanager
