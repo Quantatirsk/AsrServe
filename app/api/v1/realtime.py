@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from app.core.security import validate_token
 from app.services.realtime.client import get_capabilities
 from app.services.realtime.gateway import handle_stream
+from app.services.realtime.openai_realtime import handle_openai_realtime
 from app.services.realtime.protocol import StreamError
 
 router = APIRouter(tags=["R2T2 Realtime"])
@@ -27,6 +28,12 @@ async def recorder():
 @router.websocket("/v1/stream")
 async def stream(websocket: WebSocket):
     await handle_stream(websocket)
+
+
+@router.websocket("/v1/realtime")
+async def openai_realtime(websocket: WebSocket):
+    """OpenAI Realtime API compatible endpoint for streaming transcription."""
+    await handle_openai_realtime(websocket)
 
 
 @router.get("/v1/config")
