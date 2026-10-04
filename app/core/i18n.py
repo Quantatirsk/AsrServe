@@ -1,6 +1,9 @@
-"""Internationalization (i18n) support for AsrServe.
+"""AsrServe 国际化 (i18n) 支持
+Internationalization (i18n) support for AsrServe.
 
+使用 ASR_LOCALE 环境变量在启动时选择语言
 Uses ASR_LOCALE environment variable to select language at startup.
+支持的语言: en (英文, 默认), zh (中文)
 Supported locales: en (English, default), zh (Chinese).
 """
 
@@ -12,77 +15,88 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Default locale
+# 默认语言 / Default locale
 DEFAULT_LOCALE = "en"
 
-# Supported locales
+# 支持的语言 / Supported locales
 SUPPORTED_LOCALES = ["en", "zh"]
 
-# Path to locale files
+# 语言文件路径 / Path to locale files
 LOCALE_DIR = Path(__file__).parent.parent / "i18n"
 
-# Current locale
+# 当前语言 / Current locale
 _current_locale: str = DEFAULT_LOCALE
 
-# Translation cache
+# 翻译缓存 / Translation cache
 _translations: dict[str, Any] = {}
 
 
 def get_locale() -> str:
-    """Get the current locale."""
+    """获取当前语言
+    Get the current locale.
+    """
     return _current_locale
 
 
 def set_locale(locale: str) -> None:
-    """Set the current locale and load translations.
+    """设置当前语言并加载翻译
+    Set the current locale and load translations.
 
     Args:
-        locale: Locale code (e.g., 'en', 'zh')
+        locale: 语言代码 (例如 'en', 'zh') / Locale code (e.g., 'en', 'zh')
     """
     global _current_locale, _translations
 
     if locale not in SUPPORTED_LOCALES:
-        logger.warning(f"Unsupported locale '{locale}', falling back to '{DEFAULT_LOCALE}'")
+        logger.warning(f"不支持的语言 '{locale}'，回退到 '{DEFAULT_LOCALE}'")
+        # Unsupported locale '{locale}', falling back to '{DEFAULT_LOCALE}'
         locale = DEFAULT_LOCALE
 
     _current_locale = locale
     _translations = _load_translations(locale)
-    logger.info(f"Locale set to: {locale}")
+    logger.info(f"语言设置为: {locale}")
+    # logger.info(f"Locale set to: {locale}")
 
 
 def _load_translations(locale: str) -> dict[str, Any]:
-    """Load translations for the given locale.
+    """加载指定语言的翻译
+    Load translations for the given locale.
 
     Args:
-        locale: Locale code
+        locale: 语言代码 / Locale code
 
     Returns:
-        Dictionary of translations
+        翻译字典 / Dictionary of translations
     """
     locale_file = LOCALE_DIR / f"{locale}.json"
 
     if not locale_file.exists():
-        logger.warning(f"Locale file not found: {locale_file}")
+        logger.warning(f"语言文件未找到: {locale_file}")
+        # logger.warning(f"Locale file not found: {locale_file}")
         return {}
 
     try:
         with open(locale_file, "r", encoding="utf-8") as f:
             translations = json.load(f)
-        logger.info(f"Loaded {len(translations)} translations for locale '{locale}'")
+        logger.info(f"已加载 {len(translations)} 条 '{locale}' 语言的翻译")
+        # logger.info(f"Loaded {len(translations)} translations for locale '{locale}'")
         return translations
     except Exception as e:
-        logger.error(f"Failed to load translations for locale '{locale}': {e}")
+        logger.error(f"加载 '{locale}' 语言翻译失败: {e}")
+        # logger.error(f"Failed to load translations for locale '{locale}': {e}")
         return {}
 
 
 def translate(key: str, **kwargs: Any) -> str:
-    """Translate a string key to the current locale.
+    """将字符串键翻译为当前语言
+    Translate a string key to the current locale.
 
     Args:
-        key: Translation key (dot-separated path into translations dict)
-        **kwargs: Format arguments for the translation string
+        key: 翻译键 (点分隔的翻译字典路径) / Translation key (dot-separated path into translations dict)
+        **kwargs: 翻译字符串的格式参数 / Format arguments for the translation string
 
     Returns:
+        翻译后的字符串，如果找不到翻译则返回键本身
         Translated string, or the key itself if translation not found
     """
     # Navigate the translations dict using dot-separated key
@@ -93,6 +107,7 @@ def translate(key: str, **kwargs: Any) -> str:
         if isinstance(current, dict) and part in current:
             current = current[part]
         else:
+            # 找不到翻译，返回键本身
             # Translation not found, return the key
             return key
 
@@ -101,28 +116,36 @@ def translate(key: str, **kwargs: Any) -> str:
             try:
                 return current.format(**kwargs)
             except (KeyError, IndexError, ValueError) as e:
-                logger.warning(f"Failed to format translation for key '{key}': {e}")
+                logger.warning(f"格式化键 '{key}' 的翻译失败: {e}")
+                # logger.warning(f"Failed to format translation for key '{key}': {e}")
                 return current
         return current
 
+    # 不是字符串，返回键本身
     # Not a string, return the key
     return key
 
 
 def t(key: str, **kwargs: Any) -> str:
-    """Shorthand for translate()."""
+    """translate() 的简写
+    Shorthand for translate().
+    """
     return translate(key, **kwargs)
 
 
 def init_i18n() -> None:
-    """Initialize i18n from environment variables.
+    """从环境变量初始化 i18n
+    Initialize i18n from environment variables.
 
+    读取 ASR_LOCALE 环境变量来确定语言
     Reads ASR_LOCALE environment variable to determine locale.
+    如果未设置或无效则回退到 'en'
     Falls back to 'en' if not set or invalid.
     """
     locale = os.getenv("ASR_LOCALE", DEFAULT_LOCALE)
     set_locale(locale)
 
 
+# 模块导入时初始化 i18n
 # Initialize i18n on module import
 init_i18n()
