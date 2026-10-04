@@ -101,3 +101,20 @@ name = "flashinfer-cubin"
 version = "0.6.18.post1"
 requires-python = ">=3.8"
 requires-dist = []
+
+[tool.ty]
+# Type checking configuration
+exclude = [
+    ".git",
+    ".venv",
+    "vendor",
+    "build",
+    "dist",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

@@ -1,0 +1,58 @@
+name: Test
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --frozen --no-install-project
+
+      - name: Install development tools
+        run: |
+          uv pip install ruff ty pytest pytest-cov httpx
+
+      - name: Lint with ruff
+        run: |
+          ruff check app/ tests/
+
+      - name: Check formatting with ruff
+        run: |
+          ruff format app/ tests/ --check
+
+      - name: Type check with ty
+        run: |
+          ty check app/
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=70
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
