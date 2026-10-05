@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen
+          uv sync --frozen --extra cpu
 
       - name: Install development tools
         run: |
