@@ -1,6 +1,6 @@
 ---
-name: Documentation / 文档
-about: Report an issue or suggest an improvement to the documentation / 报告文档问题或建议改进
+name: 文档 / Documentation
+about: 报告文档问题或建议改进 / Report an issue or suggest an improvement to the documentation
 title: "📝 Docs: "
 labels: ["documentation"]
 assignees: []

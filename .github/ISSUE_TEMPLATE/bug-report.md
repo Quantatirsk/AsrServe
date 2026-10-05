@@ -1,6 +1,6 @@
 ---
-name: Bug Report / Bug 报告
-about: Report a bug in AsrServe / 报告 AsrServe 中的 bug
+name: Bug 报告 / Bug Report
+about: 报告 AsrServe 中的 bug / Report a bug in AsrServe
 title: "🐛 Bug: "
 labels: ["bug"]
 assignees: []

@@ -1,6 +1,6 @@
 ---
-name: Feature Request / 功能请求
-about: Suggest a new feature for AsrServe / 为 AsrServe 建议新功能
+name: 功能请求 / Feature Request
+about: 为 AsrServe 建议新功能 / Suggest a new feature for AsrServe
 title: "🚀 Feature: "
 labels: ["enhancement"]
 assignees: []
