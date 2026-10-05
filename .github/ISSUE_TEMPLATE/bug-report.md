@@ -1,44 +1,44 @@
 ---
-name: Bug Report
-about: Report a bug in AsrServe
+name: Bug Report / Bug 报告
+about: Report a bug in AsrServe / 报告 AsrServe 中的 bug
 title: "🐛 Bug: "
 labels: ["bug"]
 assignees: []
 ---
 
-## Description
+## 描述 / Description
 
-Brief description of the bug.
+Brief description of the bug. / Bug 的简要描述。
 
-## Steps to Reproduce
+## 复现步骤 / Steps to Reproduce
 
-1. Step 1
-2. Step 2
-3. Step 3
+1. 步骤 1 / Step 1
+2. 步骤 2 / Step 2
+3. 步骤 3 / Step 3
 
-## Expected Behavior
+## 预期行为 / Expected Behavior
 
-What should happen?
+应该发生什么？/ What should happen?
 
-## Actual Behavior
+## 实际行为 / Actual Behavior
 
-What actually happened?
+实际发生了什么？/ What actually happened?
 
-## Error Messages
+## 错误信息 / Error Messages
 
 ```
-Paste any error messages or stack traces here
+在此粘贴任何错误信息或堆栈跟踪 / Paste any error messages or stack traces here
 ```
 
-## Environment
+## 环境 / Environment
 
-- OS:
-- Python version:
-- AsrServe version:
-- Docker image (if applicable):
-- GPU (if applicable):
-- CPU architecture:
+- 操作系统 / OS:
+- Python 版本 / Python version:
+- AsrServe 版本 / AsrServe version:
+- Docker 镜像（如适用）/ Docker image (if applicable):
+- GPU（如适用）/ GPU (if applicable):
+- CPU 架构 / CPU architecture:
 
-## Additional Context
+## 其他上下文 / Additional Context
 
-Any other relevant information.
+任何其他相关信息。/ Any other relevant information.

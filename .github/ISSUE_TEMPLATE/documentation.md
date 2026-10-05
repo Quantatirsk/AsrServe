@@ -1,27 +1,27 @@
 ---
-name: Documentation
-about: Report an issue or suggest an improvement to the documentation
+name: Documentation / 文档
+about: Report an issue or suggest an improvement to the documentation / 报告文档问题或建议改进
 title: "📝 Docs: "
 labels: ["documentation"]
 assignees: []
 ---
 
-## Summary
+## 摘要 / Summary
 
-Brief description of the documentation issue or improvement.
+Brief description of the documentation issue or improvement. / 文档问题或改进的简要描述。
 
-## Location
+## 位置 / Location
 
-Which document(s) need to be updated? (e.g., README.md, docs/deployment.md)
+哪些文档需要更新？（例如 README.md、docs/deployment.md）/ Which document(s) need to be updated? (e.g., README.md, docs/deployment.md)
 
-## Current Content
+## 当前内容 / Current Content
 
-What does the documentation currently say? (quote or link)
+文档目前说了什么？（引用或链接）/ What does the documentation currently say? (quote or link)
 
-## Suggested Change
+## 建议更改 / Suggested Change
 
-What should the documentation say instead?
+文档应该改成什么？/ What should the documentation say instead?
 
-## Additional Context
+## 其他上下文 / Additional Context
 
-Any other relevant information.
+任何其他相关信息。/ Any other relevant information.

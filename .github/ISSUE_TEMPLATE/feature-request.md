@@ -1,27 +1,27 @@
 ---
-name: Feature Request
-about: Suggest a new feature for AsrServe
+name: Feature Request / 功能请求
+about: Suggest a new feature for AsrServe / 为 AsrServe 建议新功能
 title: "🚀 Feature: "
 labels: ["enhancement"]
 assignees: []
 ---
 
-## Summary
+## 摘要 / Summary
 
-Brief description of the feature you'd like to see.
+Brief description of the feature you'd like to see. / 您希望看到的功能的简要描述。
 
-## Motivation
+## 动机 / Motivation
 
-Why is this feature needed? What problem does it solve?
+为什么需要这个功能？它解决了什么问题？/ Why is this feature needed? What problem does it solve?
 
-## Proposed Implementation
+## 建议实现 / Proposed Implementation
 
-How should this feature be implemented? Any technical details or approaches you have in mind?
+这个功能应该如何实现？您有任何技术细节或方法吗？/ How should this feature be implemented? Any technical details or approaches you have in mind?
 
-## Alternatives Considered
+## 考虑过的替代方案 / Alternatives Considered
 
-What other approaches or solutions have you considered?
+您考虑过哪些其他方法或解决方案？/ What other approaches or solutions have you considered?
 
-## Additional Context
+## 其他上下文 / Additional Context
 
-Any other relevant information, links, or examples.
+任何其他相关信息、链接或示例。/ Any other relevant information, links, or examples.
