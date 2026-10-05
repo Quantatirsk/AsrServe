@@ -36,20 +36,20 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check app/ tests/
+          uv run ruff check app/ tests/
 
       - name: Check formatting with ruff
         run: |
-          ruff format app/ tests/ --check
+          uv run ruff format app/ tests/ --check
 
       # DISABLED for now - re-enable once type errors are resolved
       # - name: Type check with ty
       #   run: |
-      #     ty check app/
+      #     uv run ty check app/
 
       - name: Run tests with coverage
         run: |
-          pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=70
+          uv run pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=70
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
