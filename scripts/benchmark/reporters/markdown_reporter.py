@@ -35,8 +35,12 @@ class MarkdownReporter:
         lines.append(f"**测试时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
         if config_info:
-            lines.append(f"**服务器:** {config_info.get('host', 'localhost')}:{config_info.get('port', 8000)}")
-            lines.append(f"**并发级别:** {', '.join(map(str, config_info.get('concurrency_levels', [])))}")
+            lines.append(
+                f"**服务器:** {config_info.get('host', 'localhost')}:{config_info.get('port', 8000)}"
+            )
+            lines.append(
+                f"**并发级别:** {', '.join(map(str, config_info.get('concurrency_levels', [])))}"
+            )
 
         lines.append("")
         lines.append("---")
@@ -61,8 +65,12 @@ class MarkdownReporter:
         # 延迟指标表格
         lines.append("### 延迟指标 (毫秒)")
         lines.append("")
-        lines.append("| 并发数 | 首次响应 (Avg) | 首次响应 (P95) | 总时间 (Avg) | 总时间 (P95) | 总时间 (Max) |")
-        lines.append("|--------|---------------|---------------|-------------|-------------|-------------|")
+        lines.append(
+            "| 并发数 | 首次响应 (Avg) | 首次响应 (P95) | 总时间 (Avg) | 总时间 (P95) | 总时间 (Max) |"
+        )
+        lines.append(
+            "|--------|---------------|---------------|-------------|-------------|-------------|"
+        )
 
         for r in results:
             lines.append(
@@ -101,7 +109,9 @@ class MarkdownReporter:
         lines.append("")
 
         max_level = max(asr_results, key=lambda x: x.concurrency_level)
-        lines.append(f"- **ASR 最大并发 ({max_level.concurrency_level}) RTF:** {max_level.rtf_avg:.3f}")
+        lines.append(
+            f"- **ASR 最大并发 ({max_level.concurrency_level}) RTF:** {max_level.rtf_avg:.3f}"
+        )
         lines.append(f"- **ASR 最大并发吞吐量:** {max_level.throughput:.3f} req/s")
 
         # 找到 RTF 超过 1.0 的并发级别
@@ -113,7 +123,9 @@ class MarkdownReporter:
         lines.append("")
         lines.append("---")
         lines.append("")
-        lines.append("*RTF (Real-Time Factor): 处理时间与音频时长的比值，小于 1.0 表示处理速度快于实时*")
+        lines.append(
+            "*RTF (Real-Time Factor): 处理时间与音频时长的比值，小于 1.0 表示处理速度快于实时*"
+        )
         lines.append("")
 
         return lines

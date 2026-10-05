@@ -8,18 +8,19 @@
 """
 
 import argparse
-import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Optional
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 # 设置中文显示
-plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams["font.sans-serif"] = ["Arial Unicode MS", "SimHei", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
 
 
-def load_audio(file_path: str, channel: str = 'stereo') -> tuple:
+def load_audio(file_path: str, channel: str = "stereo") -> tuple:
     """加载音频文件
 
     Args:
@@ -31,9 +32,10 @@ def load_audio(file_path: str, channel: str = 'stereo') -> tuple:
     """
     file_ext = Path(file_path).suffix.lower()
 
-    if file_ext == '.wav':
+    if file_ext == ".wav":
         import wave
-        with wave.open(file_path, 'rb') as wav_file:
+
+        with wave.open(file_path, "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             n_channels = wav_file.getnchannels()
             sample_width = wav_file.getsampwidth()
@@ -56,17 +58,17 @@ def load_audio(file_path: str, channel: str = 'stereo') -> tuple:
             # 处理多声道
             if n_channels > 1:
                 audio_float = audio_float.reshape(-1, n_channels)
-                if channel == 'left':
+                if channel == "left":
                     audio_float = audio_float[:, 0]
-                    print(f"✓ 使用左声道")
-                elif channel == 'right':
+                    print("✓ 使用左声道")
+                elif channel == "right":
                     audio_float = audio_float[:, 1]
-                    print(f"✓ 使用右声道")
+                    print("✓ 使用右声道")
                 else:  # stereo - 平均
                     audio_float = np.mean(audio_float, axis=1)
-                    print(f"✓ 使用立体声（双声道平均）")
+                    print("✓ 使用立体声（双声道平均）")
             else:
-                print(f"✓ 使用单声道")
+                print("✓ 使用单声道")
 
             return audio_float, sample_rate
 
@@ -74,20 +76,21 @@ def load_audio(file_path: str, channel: str = 'stereo') -> tuple:
         # 尝试使用 soundfile 或 librosa
         try:
             import soundfile as sf
+
             audio_float, sample_rate = sf.read(file_path)
 
             if len(audio_float.shape) > 1:  # 多声道
-                if channel == 'left':
+                if channel == "left":
                     audio_float = audio_float[:, 0]
-                    print(f"✓ 使用左声道")
-                elif channel == 'right':
+                    print("✓ 使用左声道")
+                elif channel == "right":
                     audio_float = audio_float[:, 1]
-                    print(f"✓ 使用右声道")
+                    print("✓ 使用右声道")
                 else:
                     audio_float = np.mean(audio_float, axis=1)
-                    print(f"✓ 使用立体声（双声道平均）")
+                    print("✓ 使用立体声（双声道平均）")
             else:
-                print(f"✓ 使用单声道")
+                print("✓ 使用单声道")
 
             return audio_float, sample_rate
 
@@ -107,11 +110,12 @@ def calculate_rms_energy(audio_array: np.ndarray) -> float:
     """
     if len(audio_array) == 0:
         return 0.0
-    return float(np.sqrt(np.mean(audio_array ** 2)))
+    return float(np.sqrt(np.mean(audio_array**2)))
 
 
-def analyze_rms_timeline(audio_data: np.ndarray, sample_rate: int,
-                         chunk_size_ms: int = 240) -> tuple:
+def analyze_rms_timeline(
+    audio_data: np.ndarray, sample_rate: int, chunk_size_ms: int = 240
+) -> tuple:
     """分析音频的RMS时序
 
     Args:
@@ -149,18 +153,18 @@ def print_statistics(rms_values: np.ndarray, threshold: float = 0.01):
         rms_values: RMS值数组
         threshold: 阈值
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("RMS 统计分析")
-    print("="*60)
+    print("=" * 60)
 
-    print(f"\n📊 基础统计:")
+    print("\n📊 基础统计:")
     print(f"  - 最小值: {np.min(rms_values):.6f}")
     print(f"  - 最大值: {np.max(rms_values):.6f}")
     print(f"  - 平均值: {np.mean(rms_values):.6f}")
     print(f"  - 中位数: {np.median(rms_values):.6f}")
     print(f"  - 标准差: {np.std(rms_values):.6f}")
 
-    print(f"\n📈 百分位数:")
+    print("\n📈 百分位数:")
     for p in [10, 25, 50, 75, 90, 95, 99]:
         value = np.percentile(rms_values, p)
         print(f"  - P{p:2d}: {value:.6f}")
@@ -170,10 +174,10 @@ def print_statistics(rms_values: np.ndarray, threshold: float = 0.01):
     below_threshold = np.sum(rms_values < threshold)
     total = len(rms_values)
 
-    print(f"  - 超过阈值的帧数: {above_threshold} ({above_threshold/total*100:.1f}%)")
-    print(f"  - 低于阈值的帧数: {below_threshold} ({below_threshold/total*100:.1f}%)")
+    print(f"  - 超过阈值的帧数: {above_threshold} ({above_threshold / total * 100:.1f}%)")
+    print(f"  - 低于阈值的帧数: {below_threshold} ({below_threshold / total * 100:.1f}%)")
 
-    print(f"\n💡 建议的阈值范围:")
+    print("\n💡 建议的阈值范围:")
     # 基于非零RMS值的统计
     non_zero_rms = rms_values[rms_values > 0.001]
     if len(non_zero_rms) > 0:
@@ -183,13 +187,17 @@ def print_statistics(rms_values: np.ndarray, threshold: float = 0.01):
 
         print(f"  - 保守模式 (高灵敏度): {p10:.6f} (P10)")
         print(f"  - 宽松模式 (推荐):     {p25:.6f} (P25)")
-        print(f"  - 严格模式 (低误触):   {mean*0.5:.6f} (平均值的50%)")
+        print(f"  - 严格模式 (低误触):   {mean * 0.5:.6f} (平均值的50%)")
 
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
-def plot_rms_timeline(time_points: np.ndarray, rms_values: np.ndarray,
-                      threshold: float = 0.01, save_path: Optional[str] = None):
+def plot_rms_timeline(
+    time_points: np.ndarray,
+    rms_values: np.ndarray,
+    threshold: float = 0.01,
+    save_path: Optional[str] = None,
+):
     """绘制RMS时序图
 
     Args:
@@ -201,43 +209,69 @@ def plot_rms_timeline(time_points: np.ndarray, rms_values: np.ndarray,
     _, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
 
     # 上图: RMS时序
-    ax1.plot(time_points, rms_values, linewidth=1, label='RMS Energy', color='steelblue')
-    ax1.axhline(y=threshold, color='red', linestyle='--', linewidth=2,
-                label=f'阈值 = {threshold:.6f}')
+    ax1.plot(time_points, rms_values, linewidth=1, label="RMS Energy", color="steelblue")
+    ax1.axhline(
+        y=threshold, color="red", linestyle="--", linewidth=2, label=f"阈值 = {threshold:.6f}"
+    )
 
     # 标记超过阈值的区域
     above_threshold = rms_values >= threshold
-    ax1.fill_between(time_points, 0, rms_values, where=above_threshold,
-                     alpha=0.3, color='green', label='近场音频 (>= 阈值)')
-    ax1.fill_between(time_points, 0, rms_values, where=~above_threshold,
-                     alpha=0.3, color='red', label='远场音频 (< 阈值)')
+    ax1.fill_between(
+        time_points,
+        0,
+        rms_values,
+        where=above_threshold,
+        alpha=0.3,
+        color="green",
+        label="近场音频 (>= 阈值)",
+    )
+    ax1.fill_between(
+        time_points,
+        0,
+        rms_values,
+        where=~above_threshold,
+        alpha=0.3,
+        color="red",
+        label="远场音频 (< 阈值)",
+    )
 
-    ax1.set_xlabel('时间 (秒)', fontsize=12)
-    ax1.set_ylabel('RMS 能量', fontsize=12)
-    ax1.set_title('音频 RMS 能量时序分析', fontsize=14, fontweight='bold')
-    ax1.legend(loc='upper right', fontsize=10)
+    ax1.set_xlabel("时间 (秒)", fontsize=12)
+    ax1.set_ylabel("RMS 能量", fontsize=12)
+    ax1.set_title("音频 RMS 能量时序分析", fontsize=14, fontweight="bold")
+    ax1.legend(loc="upper right", fontsize=10)
     ax1.grid(True, alpha=0.3)
     ax1.set_ylim(bottom=0)
 
     # 下图: RMS分布直方图
-    ax2.hist(rms_values, bins=100, color='steelblue', alpha=0.7, edgecolor='black')
-    ax2.axvline(x=threshold, color='red', linestyle='--', linewidth=2,
-                label=f'阈值 = {threshold:.6f}')
-    ax2.axvline(x=np.mean(rms_values), color='orange', linestyle=':', linewidth=2,
-                label=f'平均值 = {np.mean(rms_values):.6f}')
-    ax2.axvline(x=np.median(rms_values), color='green', linestyle=':', linewidth=2,
-                label=f'中位数 = {np.median(rms_values):.6f}')
+    ax2.hist(rms_values, bins=100, color="steelblue", alpha=0.7, edgecolor="black")
+    ax2.axvline(
+        x=threshold, color="red", linestyle="--", linewidth=2, label=f"阈值 = {threshold:.6f}"
+    )
+    ax2.axvline(
+        x=np.mean(rms_values),
+        color="orange",
+        linestyle=":",
+        linewidth=2,
+        label=f"平均值 = {np.mean(rms_values):.6f}",
+    )
+    ax2.axvline(
+        x=np.median(rms_values),
+        color="green",
+        linestyle=":",
+        linewidth=2,
+        label=f"中位数 = {np.median(rms_values):.6f}",
+    )
 
-    ax2.set_xlabel('RMS 能量', fontsize=12)
-    ax2.set_ylabel('帧数', fontsize=12)
-    ax2.set_title('RMS 能量分布直方图', fontsize=14, fontweight='bold')
-    ax2.legend(loc='upper right', fontsize=10)
-    ax2.grid(True, alpha=0.3, axis='y')
+    ax2.set_xlabel("RMS 能量", fontsize=12)
+    ax2.set_ylabel("帧数", fontsize=12)
+    ax2.set_title("RMS 能量分布直方图", fontsize=14, fontweight="bold")
+    ax2.legend(loc="upper right", fontsize=10)
+    ax2.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
         print(f"✓ 图表已保存到: {save_path}")
 
     plt.show()
@@ -245,7 +279,7 @@ def plot_rms_timeline(time_points: np.ndarray, rms_values: np.ndarray,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='音频RMS时序分析工具 - 帮助确定远场过滤阈值',
+        description="音频RMS时序分析工具 - 帮助确定远场过滤阈值",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
@@ -263,22 +297,25 @@ def main():
 
   # 保存图表
   python analyze_audio_rms.py audio.wav --output rms_analysis.png
-        """
+        """,
     )
 
-    parser.add_argument('audio_file', type=str,
-                       help='音频文件路径 (支持 WAV, MP3, FLAC 等格式)')
-    parser.add_argument('--channel', type=str, choices=['stereo', 'left', 'right'],
-                       default='stereo',
-                       help='声道选择: stereo(立体声平均), left(左声道), right(右声道) [默认: stereo]')
-    parser.add_argument('--threshold', type=float, default=0.01,
-                       help='RMS能量阈值 [默认: 0.01]')
-    parser.add_argument('--chunk-size', type=int, default=240,
-                       help='分块大小(毫秒) [默认: 240ms，与流式ASR一致]')
-    parser.add_argument('--output', '-o', type=str, default=None,
-                       help='保存图表的路径 (例如: output.png)')
-    parser.add_argument('--no-plot', action='store_true',
-                       help='不显示图表，仅输出统计信息')
+    parser.add_argument("audio_file", type=str, help="音频文件路径 (支持 WAV, MP3, FLAC 等格式)")
+    parser.add_argument(
+        "--channel",
+        type=str,
+        choices=["stereo", "left", "right"],
+        default="stereo",
+        help="声道选择: stereo(立体声平均), left(左声道), right(右声道) [默认: stereo]",
+    )
+    parser.add_argument("--threshold", type=float, default=0.01, help="RMS能量阈值 [默认: 0.01]")
+    parser.add_argument(
+        "--chunk-size", type=int, default=240, help="分块大小(毫秒) [默认: 240ms，与流式ASR一致]"
+    )
+    parser.add_argument(
+        "--output", "-o", type=str, default=None, help="保存图表的路径 (例如: output.png)"
+    )
+    parser.add_argument("--no-plot", action="store_true", help="不显示图表，仅输出统计信息")
 
     args = parser.parse_args()
 
@@ -287,9 +324,9 @@ def main():
         print(f"错误: 文件不存在: {args.audio_file}")
         sys.exit(1)
 
-    print("="*60)
+    print("=" * 60)
     print("音频 RMS 时序分析工具")
-    print("="*60)
+    print("=" * 60)
     print(f"\n📁 文件: {args.audio_file}")
     print(f"🎚️  声道: {args.channel}")
     print(f"📊 分块大小: {args.chunk_size}ms")
@@ -324,5 +361,5 @@ def main():
         plt.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

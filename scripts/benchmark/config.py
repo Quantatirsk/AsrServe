@@ -4,8 +4,8 @@
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 
 
 @dataclass

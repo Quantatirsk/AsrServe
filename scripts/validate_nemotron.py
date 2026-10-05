@@ -5,17 +5,17 @@ Run with python -m scripts.validate_nemotron; authentication uses API_KEY only.
 
 import argparse
 import asyncio
-from collections import Counter, defaultdict
-from contextlib import redirect_stdout
 import html
 import json
 import math
 import os
-from pathlib import Path
 import shutil
 import statistics
 import subprocess
 import time
+from collections import Counter, defaultdict
+from contextlib import redirect_stdout
+from pathlib import Path
 
 import httpx
 
@@ -46,9 +46,9 @@ def audit(payload: dict, words_enabled: bool, diarization_enabled: bool) -> dict
     raw = payload.get("speaker_segments") or []
     assert math.isfinite(duration) and duration > 0, "Invalid audio duration"
     assert payload["text"] and segments, "Empty speech transcription"
-    assert normalize("".join(s["text"] for s in segments)) == normalize(
-        payload["text"]
-    ), "Segment text does not reconstruct full text"
+    assert normalize("".join(s["text"] for s in segments)) == normalize(payload["text"]), (
+        "Segment text does not reconstruct full text"
+    )
 
     previous_end = 0.0
     for segment in segments:
@@ -57,14 +57,14 @@ def audit(payload: dict, words_enabled: bool, diarization_enabled: bool) -> dict
         assert -0.003 <= start <= end <= duration + 0.003, "Segment outside audio"
         assert start >= previous_end - 0.003, "Overlapping ASR segments"
         previous_end = end
-        assert not (
-            segment.get("speaker") and segment.get("speaker_candidates")
-        ), "An uncertain segment was assigned to one speaker"
+        assert not (segment.get("speaker") and segment.get("speaker_candidates")), (
+            "An uncertain segment was assigned to one speaker"
+        )
     if words_enabled:
         assert words, "Word timestamps were requested but absent"
-        assert normalize("".join(w["word"] for w in words)) == normalize(
-            payload["text"]
-        ), "Aligned words lost or added text"
+        assert normalize("".join(w["word"] for w in words)) == normalize(payload["text"]), (
+            "Aligned words lost or added text"
+        )
     else:
         assert not words, "Internal alignment leaked into public word timestamps"
     previous_end = 0.0
@@ -76,15 +76,12 @@ def audit(payload: dict, words_enabled: bool, diarization_enabled: bool) -> dict
         assert -0.003 <= start <= end <= duration + 0.003, "Word outside audio"
         assert start >= previous_end - 0.003, "Word timestamps moved backwards"
         previous_end = end
-        while (
-            segment_index + 1 < len(segments)
-            and segments[segment_index]["end"] < end - 0.003
-        ):
+        while segment_index + 1 < len(segments) and segments[segment_index]["end"] < end - 0.003:
             segment_index += 1
         segment = segments[segment_index]
-        assert (
-            segment["start"] - 0.003 <= start <= end <= segment["end"] + 0.003
-        ), "Word escaped its segment; possible relative/absolute offset error"
+        assert segment["start"] - 0.003 <= start <= end <= segment["end"] + 0.003, (
+            "Word escaped its segment; possible relative/absolute offset error"
+        )
         if end > start and normalize(word["word"]):
             key = (normalize(word["word"]), start, end)
             assert key not in spans, "Duplicated positive-duration word/time span"
@@ -96,8 +93,7 @@ def audit(payload: dict, words_enabled: bool, diarization_enabled: bool) -> dict
     else:
         assert payload.get("speaker_segments") is None, "Diarization flag ignored"
         assert all(
-            s.get("speaker") is None and not s.get("speaker_candidates")
-            for s in segments
+            s.get("speaker") is None and not s.get("speaker_candidates") for s in segments
         ), "Speaker annotations leaked with diarization disabled"
 
     events: dict[float, Counter] = defaultdict(Counter)
@@ -161,8 +157,7 @@ def export_listening(output: Path, audio: Path, payload: dict, summary: dict) ->
             speaker += " (" + ", ".join(candidates) + ")"
         start, end = segment["start"], segment["end"]
         subtitles.append(
-            f"{index}\n{timestamp(start)} --> {timestamp(end)}\n"
-            f"[{speaker}] {segment['text']}\n"
+            f"{index}\n{timestamp(start)} --> {timestamp(end)}\n[{speaker}] {segment['text']}\n"
         )
         rows.append(
             f'<tr><td><button data-start="{start}" data-end="{end}">'
@@ -189,7 +184,7 @@ def export_listening(output: Path, audio: Path, payload: dict, summary: dict) ->
         lane = speakers.index(speaker)
         rectangles.append(
             f'<rect x="{start / duration * 1000:.3f}" y="{lane * 26 + 3}" '
-            f'width="{max(0.25, (end-start) / duration * 1000):.3f}" height="20" '
+            f'width="{max(0.25, (end - start) / duration * 1000):.3f}" height="20" '
             f'fill="{colors[lane]}" role="button" tabindex="0" '
             f'data-start="{start}" data-end="{end}"><title>'
             f"{html.escape(speaker)} {start:.2f} - {end:.2f}</title></rect>"
@@ -221,15 +216,12 @@ Brief interjections are included in the main speaker paragraph; the raw activity
         + html.escape(", ".join(speakers))
         + ". Each lane retains overlapping activity.</p>"
     )
-    page += f'<svg viewBox="0 0 1000 {max(26, len(speakers)*26)}" aria-label="Raw speaker timeline">'
+    page += (
+        f'<svg viewBox="0 0 1000 {max(26, len(speakers) * 26)}" aria-label="Raw speaker timeline">'
+    )
     page += "".join(rectangles) + "</svg>"
-    page += (
-        "<details><summary>Validation and late-return listening points</summary><pre>"
-    )
-    page += (
-        html.escape(json.dumps(summary, ensure_ascii=False, indent=2))
-        + "</pre></details>"
-    )
+    page += "<details><summary>Validation and late-return listening points</summary><pre>"
+    page += html.escape(json.dumps(summary, ensure_ascii=False, indent=2)) + "</pre></details>"
     returns = summary.get("late_returns_for_listening", [])[:10]
     if returns:
         page += "<h2>Longest silent gaps: compare voices</h2>"
@@ -247,10 +239,7 @@ Brief interjections are included in the main speaker paragraph; the raw activity
             )
         page += "</table>"
     page += "<h2>Transcript</h2><table><tr><th>Seconds</th><th>Main speaker</th><th>Text</th></tr>"
-    page += (
-        "".join(rows)
-        + "</table><details><summary>Raw activity intervals</summary><table>"
-    )
+    page += "".join(rows) + "</table><details><summary>Raw activity intervals</summary><table>"
     page += "".join(raw_rows) + "</table></details>"
     page += """<script>
 const audio = document.getElementById('audio');
@@ -366,9 +355,7 @@ def main() -> None:
     headers = {"Authorization": "Bearer " + api_key} if api_key else {}
     report: dict = {"cases": {}, "failures": [], "streaming": "not_run"}
     payloads = {}
-    with httpx.Client(
-        headers=headers, timeout=httpx.Timeout(3600, connect=15)
-    ) as client:
+    with httpx.Client(headers=headers, timeout=httpx.Timeout(3600, connect=15)) as client:
         for name, audio, diarization, words in [
             ("short_full", short, True, True),
             ("short_internal_alignment", short, True, False),
@@ -472,9 +459,7 @@ def main() -> None:
             report["failures"].append({"case": "streaming", "error": str(error)})
             report["streaming"] = "failed"
     write_json(args.output / "report.json", report)
-    links = "".join(
-        f'<li><a href="{name}/index.html">{name}</a></li>' for name in report["cases"]
-    )
+    links = "".join(f'<li><a href="{name}/index.html">{name}</a></li>' for name in report["cases"])
     (args.output / "index.html").write_text(
         '<!doctype html><html lang="en"><meta charset="utf-8"><title>Nemotron validation</title>'
         "<h1>Nemotron validation</h1><p>Model output requires listening review; no accuracy ground truth.</p>"
@@ -483,9 +468,7 @@ def main() -> None:
         encoding="utf-8",
     )
     if report["failures"]:
-        raise SystemExit(
-            f"{len(report['failures'])} validation cases failed; see report.json"
-        )
+        raise SystemExit(f"{len(report['failures'])} validation cases failed; see report.json")
 
 
 if __name__ == "__main__":

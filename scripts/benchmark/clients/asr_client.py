@@ -6,9 +6,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from .base_client import BaseWebSocketClient
-from ..metrics.models import ASRMetrics
 from app.services.realtime.protocol import MODEL_ID, supervise
+
+from ..metrics.models import ASRMetrics
+from .base_client import BaseWebSocketClient
 
 
 class ASRWebSocketClient(BaseWebSocketClient):
@@ -24,9 +25,7 @@ class ASRWebSocketClient(BaseWebSocketClient):
     ):
         super().__init__(ws_url, timeout)
         if sample_rate != 16000 or not 1 <= chunk_size <= sample_rate:
-            raise ValueError(
-                "R2T2 requires 16 kHz int16 PCM and frames <= 1 second"
-            )
+            raise ValueError("R2T2 requires 16 kHz int16 PCM and frames <= 1 second")
         self.audio_data = audio_data
         self.audio_duration_ms = audio_duration_ms
         self.sample_rate = sample_rate
@@ -60,9 +59,7 @@ class ASRWebSocketClient(BaseWebSocketClient):
         async def send():
             for offset in range(0, len(self.audio_data), self.chunk_bytes):
                 end = min(offset + self.chunk_bytes, len(self.audio_data))
-                await asyncio.sleep(
-                    max(0, started + end / (16000 * 2) - time.perf_counter())
-                )
+                await asyncio.sleep(max(0, started + end / (16000 * 2) - time.perf_counter()))
                 await self.send_bytes(self.audio_data[offset:end])
             await self.websocket.send("end")
             await asyncio.Future()  # Receiver owns successful completion.

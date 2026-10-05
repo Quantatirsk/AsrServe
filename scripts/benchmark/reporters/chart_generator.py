@@ -6,14 +6,14 @@ Matplotlib 图表生成器
 from pathlib import Path
 from typing import List
 
-import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.pyplot as plt
 
 from ..metrics.models import AggregatedMetrics
 
 # 设置中文字体支持
-matplotlib.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
-matplotlib.rcParams['axes.unicode_minus'] = False
+matplotlib.rcParams["font.sans-serif"] = ["Arial Unicode MS", "SimHei", "DejaVu Sans"]
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 
 class ChartGenerator:
@@ -75,15 +75,30 @@ class ChartGenerator:
         avg_values = [r.first_latency_avg for r in asr_results]
         p95_values = [r.first_latency_p95 for r in asr_results]
 
-        ax.plot(levels, avg_values, 'o-', color=self.color,
-               label='ASR 首次响应 (Avg)', linewidth=2, markersize=8)
-        ax.plot(levels, p95_values, 's--', color=self.color,
-               label='ASR 首次响应 (P95)', linewidth=1.5, markersize=6, alpha=0.7)
+        ax.plot(
+            levels,
+            avg_values,
+            "o-",
+            color=self.color,
+            label="ASR 首次响应 (Avg)",
+            linewidth=2,
+            markersize=8,
+        )
+        ax.plot(
+            levels,
+            p95_values,
+            "s--",
+            color=self.color,
+            label="ASR 首次响应 (P95)",
+            linewidth=1.5,
+            markersize=6,
+            alpha=0.7,
+        )
 
-        ax.set_xlabel('并发数', fontsize=12)
-        ax.set_ylabel('延迟 (ms)', fontsize=12)
-        ax.set_title('首次响应延迟 vs 并发数', fontsize=14, fontweight='bold')
-        ax.legend(loc='best')
+        ax.set_xlabel("并发数", fontsize=12)
+        ax.set_ylabel("延迟 (ms)", fontsize=12)
+        ax.set_title("首次响应延迟 vs 并发数", fontsize=14, fontweight="bold")
+        ax.legend(loc="best")
         ax.grid(True, alpha=0.3)
         ax.set_xticks(levels)
 
@@ -103,19 +118,33 @@ class ChartGenerator:
         avg_values = [r.rtf_avg for r in asr_results]
         p95_values = [r.rtf_p95 for r in asr_results]
 
-        ax.plot(levels, avg_values, 'o-', color=self.color,
-               label='ASR RTF (Avg)', linewidth=2, markersize=8)
-        ax.plot(levels, p95_values, 's--', color=self.color,
-               label='ASR RTF (P95)', linewidth=1.5, markersize=6, alpha=0.7)
+        ax.plot(
+            levels,
+            avg_values,
+            "o-",
+            color=self.color,
+            label="ASR RTF (Avg)",
+            linewidth=2,
+            markersize=8,
+        )
+        ax.plot(
+            levels,
+            p95_values,
+            "s--",
+            color=self.color,
+            label="ASR RTF (P95)",
+            linewidth=1.5,
+            markersize=6,
+            alpha=0.7,
+        )
 
         # 添加 RTF=1.0 参考线
-        ax.axhline(y=1.0, color='red', linestyle=':', linewidth=1.5,
-                  label='RTF = 1.0 (实时)')
+        ax.axhline(y=1.0, color="red", linestyle=":", linewidth=1.5, label="RTF = 1.0 (实时)")
 
-        ax.set_xlabel('并发数', fontsize=12)
-        ax.set_ylabel('RTF', fontsize=12)
-        ax.set_title('RTF vs 并发数', fontsize=14, fontweight='bold')
-        ax.legend(loc='best')
+        ax.set_xlabel("并发数", fontsize=12)
+        ax.set_ylabel("RTF", fontsize=12)
+        ax.set_title("RTF vs 并发数", fontsize=14, fontweight="bold")
+        ax.legend(loc="best")
         ax.grid(True, alpha=0.3)
 
         plt.tight_layout()
@@ -131,14 +160,15 @@ class ChartGenerator:
         _fig, ax = plt.subplots(figsize=(10, 6))
 
         labels = [str(r.concurrency_level) for r in asr_results]
-        ax.bar(labels, [r.throughput for r in asr_results], label='ASR',
-              color=self.color, alpha=0.8)
+        ax.bar(
+            labels, [r.throughput for r in asr_results], label="ASR", color=self.color, alpha=0.8
+        )
 
-        ax.set_xlabel('并发数', fontsize=12)
-        ax.set_ylabel('吞吐量 (req/s)', fontsize=12)
-        ax.set_title('吞吐量 vs 并发数', fontsize=14, fontweight='bold')
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_xlabel("并发数", fontsize=12)
+        ax.set_ylabel("吞吐量 (req/s)", fontsize=12)
+        ax.set_title("吞吐量 vs 并发数", fontsize=14, fontweight="bold")
+        ax.legend(loc="best")
+        ax.grid(True, alpha=0.3, axis="y")
 
         plt.tight_layout()
         plt.savefig(output_path, dpi=150)
@@ -156,15 +186,30 @@ class ChartGenerator:
         avg_values = [r.total_time_avg for r in asr_results]
         p95_values = [r.total_time_p95 for r in asr_results]
 
-        ax.plot(levels, avg_values, 'o-', color=self.color,
-               label='ASR 总时间 (Avg)', linewidth=2, markersize=8)
-        ax.plot(levels, p95_values, 's--', color=self.color,
-               label='ASR 总时间 (P95)', linewidth=1.5, markersize=6, alpha=0.7)
+        ax.plot(
+            levels,
+            avg_values,
+            "o-",
+            color=self.color,
+            label="ASR 总时间 (Avg)",
+            linewidth=2,
+            markersize=8,
+        )
+        ax.plot(
+            levels,
+            p95_values,
+            "s--",
+            color=self.color,
+            label="ASR 总时间 (P95)",
+            linewidth=1.5,
+            markersize=6,
+            alpha=0.7,
+        )
 
-        ax.set_xlabel('并发数', fontsize=12)
-        ax.set_ylabel('时间 (ms)', fontsize=12)
-        ax.set_title('总处理时间 vs 并发数', fontsize=14, fontweight='bold')
-        ax.legend(loc='best')
+        ax.set_xlabel("并发数", fontsize=12)
+        ax.set_ylabel("时间 (ms)", fontsize=12)
+        ax.set_title("总处理时间 vs 并发数", fontsize=14, fontweight="bold")
+        ax.legend(loc="best")
         ax.grid(True, alpha=0.3)
 
         plt.tight_layout()

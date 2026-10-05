@@ -278,7 +278,7 @@ pub struct KvCache {
 }
 
 impl KvCache {
-    /// Layout: `[layer][head][pos][head_dim]` — head-contiguous for cache-friendly attention.
+    /// Layout: `[layer][head][pos][head_dim]` -- head-contiguous for cache-friendly attention.
     pub fn new(n_layers: usize, max_seq: usize, n_kv_heads: usize, head_dim: usize) -> Self {
         let total = n_layers * n_kv_heads * max_seq * head_dim;
         KvCache {

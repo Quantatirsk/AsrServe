@@ -1,7 +1,7 @@
 # qwen_asr
 
 CPU-only Qwen3-ASR speech recognition in pure Rust. No Python, no ONNX runtime,
-no framework dependencies — just `libc` and BLAS. BF16 weights stay memory-mapped
+no framework dependencies -- just `libc` and BLAS. BF16 weights stay memory-mapped
 for minimal RAM usage; SIMD kernels (NEON / AVX2+FMA) accelerate inference.
 
 ## Prerequisites
@@ -28,7 +28,7 @@ AVX2+FMA instructions on x86_64:
 RUSTFLAGS="-C target-cpu=native" cargo build --release
 ```
 
-On AArch64 (Apple Silicon, ARM Linux) NEON is baseline — no extra flags needed,
+On AArch64 (Apple Silicon, ARM Linux) NEON is baseline -- no extra flags needed,
 though `-C target-cpu=native` is still recommended for other micro-architecture
 tuning.
 
@@ -137,7 +137,7 @@ let results = align::forced_align(&mut ctx, &samples, "Hello world", "English")
     .expect("alignment failed");
 
 for r in &results {
-    println!("{}: {:.0} ms – {:.0} ms", r.text, r.start_ms, r.end_ms);
+    println!("{}: {:.0} ms - {:.0} ms", r.text, r.start_ms, r.end_ms);
 }
 ```
 

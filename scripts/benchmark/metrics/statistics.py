@@ -4,9 +4,10 @@
 """
 
 from typing import List
+
 import numpy as np
 
-from .models import ASRMetrics, AggregatedMetrics
+from .models import AggregatedMetrics, ASRMetrics
 
 
 def calculate_percentile(values: List[float], percentile: float) -> float:

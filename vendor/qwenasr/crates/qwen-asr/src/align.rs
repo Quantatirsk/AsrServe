@@ -16,9 +16,9 @@ const SUFFIX_BASE: &[i32] = &[151670, 151645, 198, 151644, 77091, 198];
 
 /// A single word (or character for CJK) with its aligned time span.
 ///
-/// * `text`     – the word or character this entry covers.
-/// * `start_ms` – start time in milliseconds from the beginning of the audio.
-/// * `end_ms`   – end time in milliseconds.
+/// * `text`     - the word or character this entry covers.
+/// * `start_ms` - start time in milliseconds from the beginning of the audio.
+/// * `end_ms`   - end time in milliseconds.
 #[derive(Debug, Clone)]
 pub struct AlignResult {
     pub text: String,

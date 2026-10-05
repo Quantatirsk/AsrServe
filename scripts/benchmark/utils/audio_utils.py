@@ -5,6 +5,7 @@
 
 from pathlib import Path
 from typing import Tuple
+
 import numpy as np
 import soundfile as sf
 
@@ -63,10 +64,13 @@ def resample_audio(
         return audio_data
 
     from math import gcd
+
     from scipy.signal import resample_poly
 
     divisor = gcd(orig_sample_rate, target_sample_rate)
-    resampled = resample_poly(audio_data, target_sample_rate // divisor, orig_sample_rate // divisor)
+    resampled = resample_poly(
+        audio_data, target_sample_rate // divisor, orig_sample_rate // divisor
+    )
 
     return resampled.astype(np.float32)
 
