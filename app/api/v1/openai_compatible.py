@@ -543,11 +543,11 @@ async def create_transcription(
         False,
         description="Return word timestamps using the forced aligner (disabled by default).",
     ),
-    hotwords: Optional[str] = Form(
+    hotwords: str | None = Form(
         None,
         description=f"热词提示，如人名、产品名，可用逗号或换行分隔。与 prompt 合并后最多 {MAX_CONTEXT_CHARACTERS} 个字符",
     ),
-    prompt: Optional[str] = Form(
+    prompt: str | None = Form(
         None,
         description=f"识别上下文，如录音主题、术语。与 hotwords 同时提供时按此顺序用换行连接，合计最多 {MAX_CONTEXT_CHARACTERS} 个字符",
     ),
@@ -558,7 +558,6 @@ async def create_transcription(
         examples=["verbose_json", "json", "text", "srt", "vtt"],
     ),
     # 6. 兼容性参数（暂不支持）
-    prompt: str | None = Form(None, description="提示文本（暂不支持，保留兼容）"),
     temperature: float | None = Form(0, description="采样温度（暂不支持，保留兼容）"),
     timestamp_granularities: list[str] | None = Form(
         None,
