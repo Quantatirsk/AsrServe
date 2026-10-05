@@ -48,6 +48,8 @@ jobs:
       #     uv run ty check app/
 
       - name: Run tests with coverage
+        env:
+          PYTHONPATH: "."
         run: |
           uv run pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=70
 
