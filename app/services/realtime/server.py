@@ -35,9 +35,7 @@ from .protocol import (
 logger = logging.getLogger(__name__)
 
 
-async def offline_result(
-    request: Request, model: Model, audio: np.ndarray, context: str
-) -> str:
+async def offline_result(request: Request, model: Model, audio: np.ndarray, context: str) -> str:
     async def disconnected() -> None:
         while (await request.receive())["type"] != "http.disconnect":
             pass
@@ -63,9 +61,7 @@ def create_app(model_factory=Model, *, max_sessions=None):
     capacity = (
         max_sessions
         if max_sessions is not None
-        else int(
-            os.getenv("R2T2_MAX_SESSIONS", "1" if settings.DEVICE == "cpu" else "4")
-        )
+        else int(os.getenv("R2T2_MAX_SESSIONS", "1" if settings.DEVICE == "cpu" else "4"))
     )
     if not 1 <= capacity <= 64:
         raise ValueError("R2T2_MAX_SESSIONS must be between 1 and 64")
@@ -91,9 +87,7 @@ def create_app(model_factory=Model, *, max_sessions=None):
     app.state.chunk_samples = CHUNK_SAMPLES
 
     def authorized(headers):
-        return not token or hmac.compare_digest(
-            headers.get("authorization", ""), f"Bearer {token}"
-        )
+        return not token or hmac.compare_digest(headers.get("authorization", ""), f"Bearer {token}")
 
     def capabilities():
         return {
@@ -167,13 +161,9 @@ def create_app(model_factory=Model, *, max_sessions=None):
             text = await offline_result(request, app.state.model, audio, context)
             return {"text": text}
         except StreamError as error:
-            return JSONResponse(
-                {"error": str(error), "code": error.code}, status_code=error.status
-            )
-        except asyncio.TimeoutError:
-            return JSONResponse(
-                {"error": "Offline audio upload timed out"}, status_code=408
-            )
+            return JSONResponse({"error": str(error), "code": error.code}, status_code=error.status)
+        except TimeoutError:
+            return JSONResponse({"error": "Offline audio upload timed out"}, status_code=408)
         except Exception:
             logger.exception("Offline R2T2 inference failed")
             return JSONResponse({"error": "Offline inference failed"}, status_code=500)
@@ -199,13 +189,9 @@ def create_app(model_factory=Model, *, max_sessions=None):
         model = app.state.model
         try:
             await ws.accept()
-            config = StreamConfig.model_validate(
-                await asyncio.wait_for(ws.receive_json(), 10)
-            )
+            config = StreamConfig.model_validate(await asyncio.wait_for(ws.receive_json(), 10))
             session = model.new_session(config)
-            await asyncio.wait_for(
-                ws.send_json(dict(capabilities(), session_id=session.id)), 5
-            )
+            await asyncio.wait_for(ws.send_json(dict(capabilities(), session_id=session.id)), 5)
 
             async def receive():
                 samples = 0
@@ -215,16 +201,12 @@ def create_app(model_factory=Model, *, max_sessions=None):
                     if message["type"] == "websocket.disconnect":
                         return
                     if ended:
-                        raise StreamError(
-                            "session_finished", "No messages are allowed after end"
-                        )
+                        raise StreamError("session_finished", "No messages are allowed after end")
                     data = message.get("bytes")
                     if data is not None:
                         samples += validate_pcm(data)
                         if samples > MAX_SECONDS * SAMPLE_RATE:
-                            raise StreamError(
-                                "session_limit", "Maximum session duration exceeded"
-                            )
+                            raise StreamError("session_limit", "Maximum session duration exceeded")
                         await asyncio.wait_for(queue.put(data), 5)
                     elif message.get("text") == "end":
                         ended = True
@@ -239,15 +221,11 @@ def create_app(model_factory=Model, *, max_sessions=None):
                     started = time.perf_counter()
                     utterance = session.utterance
                     audio = np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768
-                    delta = await asyncio.wait_for(
-                        model.push(session, audio, final=final), 25
-                    )
+                    delta = await asyncio.wait_for(model.push(session, audio, final=final), 25)
                     event = {
                         "delta": delta,
                         "audio_ms": round(session.samples * 1000 / SAMPLE_RATE),
-                        "inference_ms": round(
-                            (time.perf_counter() - started) * 1000, 1
-                        ),
+                        "inference_ms": round((time.perf_counter() - started) * 1000, 1),
                         "done": final,
                         # This delta belongs to `utterance`; a pause or the end
                         # closes it at `audio_ms`.
@@ -285,9 +263,7 @@ def create_app(model_factory=Model, *, max_sessions=None):
                 logger.exception("R2T2 session failed")
                 code, message = "inference_failed", "Realtime inference failed"
             with suppress(WebSocketDisconnect, RuntimeError, OSError, TimeoutError):
-                await asyncio.wait_for(
-                    ws.send_json({"code": code, "error": message}), 2
-                )
+                await asyncio.wait_for(ws.send_json({"code": code, "error": message}), 2)
         finally:
             try:
                 await queue.abort()

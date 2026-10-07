@@ -1,18 +1,17 @@
-# -*- coding: utf-8 -*-
 """
 音频分割模块
 基于 Nemotron 活动区间的音频分割，支持长音频分段识别
 """
 
 import logging
-import numpy as np
-import librosa
-import soundfile as sf
-import tempfile
 import os
-from itertools import pairwise
-from typing import List, Tuple, Optional
+import tempfile
 from dataclasses import dataclass
+from itertools import pairwise
+
+import librosa
+import numpy as np
+import soundfile as sf
 
 from ..core.config import settings
 from ..core.exceptions import DefaultServerErrorException
@@ -26,8 +25,8 @@ class AudioSegment:
 
     start_ms: int  # 开始时间（毫秒）
     end_ms: int  # 结束时间（毫秒）
-    audio_data: Optional[np.ndarray] = None  # 音频数据
-    temp_file: Optional[str] = None  # 临时文件路径
+    audio_data: np.ndarray | None = None  # 音频数据
+    temp_file: str | None = None  # 临时文件路径
 
     @property
     def start_sec(self) -> float:
@@ -77,8 +76,8 @@ class AudioSplitter:
         self.min_segment_ms = int(min_segment_sec * 1000)
 
     def merge_segments_greedy(
-        self, speech_segments: List[Tuple[int, int]], total_duration_ms: int
-    ) -> List[Tuple[int, int]]:
+        self, speech_segments: list[tuple[int, int]], total_duration_ms: int
+    ) -> list[tuple[int, int]]:
         """按语音活动区间边界切分整条时间轴
 
         策略：
@@ -95,9 +94,7 @@ class AudioSplitter:
             覆盖 [0, total_duration_ms] 的连续段列表 [(start_ms, end_ms), ...]
         """
         edges = {
-            min(total_duration_ms, max(0, int(edge)))
-            for span in speech_segments
-            for edge in span
+            min(total_duration_ms, max(0, int(edge))) for span in speech_segments for edge in span
         }
         merged = list(pairwise(sorted(edges | {0, total_duration_ms})))
 
@@ -146,7 +143,7 @@ class AudioSplitter:
             for start, end in self._split_by_fixed_duration(end_ms - start_ms)
         ]
 
-    def _split_by_fixed_duration(self, total_duration_ms: int) -> List[Tuple[int, int]]:
+    def _split_by_fixed_duration(self, total_duration_ms: int) -> list[tuple[int, int]]:
         """按固定时长切分超长片段
 
         Args:
@@ -156,9 +153,7 @@ class AudioSplitter:
             切分后的段列表
         """
         if self.split_trigger_ms < 1:
-            raise ValueError(
-                "Maximum segment duration must be at least one millisecond"
-            )
+            raise ValueError("Maximum segment duration must be at least one millisecond")
         segments = []
         current = 0
         min_tail_ms = min(self.min_segment_ms, self.split_trigger_ms)
@@ -174,10 +169,10 @@ class AudioSplitter:
     def split_audio_file(
         self,
         audio_path: str,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         *,
-        speech_segments: List[Tuple[int, int]],
-    ) -> List[AudioSegment]:
+        speech_segments: list[tuple[int, int]],
+    ) -> list[AudioSegment]:
         """分割音频文件
 
         Args:
@@ -208,9 +203,7 @@ class AudioSplitter:
                     )
                 ]
 
-            merged_segments = self.merge_segments_greedy(
-                speech_segments, total_duration_ms
-            )
+            merged_segments = self.merge_segments_greedy(speech_segments, total_duration_ms)
             logger.info(
                 "重分段完成: 来源=Nemotron, 原始语音区间=%d, 输出=%d",
                 len(speech_segments),
@@ -262,4 +255,4 @@ class AudioSplitter:
 
         except Exception as e:
             logger.error(f"音频分割失败: {e}")
-            raise DefaultServerErrorException(f"音频分割失败: {str(e)}")
+            raise DefaultServerErrorException(f"音频分割失败: {e!s}")

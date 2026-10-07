@@ -4,12 +4,12 @@ WebSocket 客户端基类
 """
 
 import json
-import uuid
 import logging
+import uuid
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
-from websockets.legacy.client import connect, WebSocketClientProtocol  # type: ignore
+from websockets.legacy.client import WebSocketClientProtocol, connect  # type: ignore
 
 logger = logging.getLogger(__name__)
 

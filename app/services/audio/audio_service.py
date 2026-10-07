@@ -4,7 +4,6 @@ import threading
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
-from typing import Optional
 
 from ...core.config import settings
 from ...core.exceptions import InvalidMessageException
@@ -33,10 +32,10 @@ class AudioProcessingService:
     def prepare(
         self,
         *,
-        audio_data: Optional[bytes],
-        audio_address: Optional[str] = None,
-        filename: Optional[str] = None,
-        task_id: Optional[str] = None,
+        audio_data: bytes | None,
+        audio_address: str | None = None,
+        filename: str | None = None,
+        task_id: str | None = None,
         sample_rate: int = 16000,
     ) -> Iterator[AudioProcessingResult]:
         task_id = task_id or "unknown"
@@ -52,9 +51,7 @@ class AudioProcessingService:
             )
 
         with ExitStack() as files:
-            suffix = get_audio_file_suffix(
-                audio_address=filename, audio_data=audio_data
-            )
+            suffix = get_audio_file_suffix(audio_address=filename, audio_data=audio_data)
             original_path = save_audio_to_temp_file(audio_data, suffix)
             files.callback(cleanup_temp_file, original_path)
             normalized = normalize_audio_for_asr(original_path, sample_rate)
@@ -62,14 +59,13 @@ class AudioProcessingService:
                 files.callback(cleanup_temp_file, normalized.path)
             yield AudioProcessingResult(
                 normalized_path=normalized.path,
-                duration=get_audio_duration(normalized.path)
-                * normalized.timestamp_scale,
+                duration=get_audio_duration(normalized.path) * normalized.timestamp_scale,
                 original_path=original_path,
                 timestamp_scale=normalized.timestamp_scale,
             )
 
 
-_audio_service: Optional[AudioProcessingService] = None
+_audio_service: AudioProcessingService | None = None
 _audio_service_lock = threading.Lock()
 
 

@@ -78,9 +78,7 @@ async def replay(url, pcm, headers):
                     first = first or (time.perf_counter() - start)
                     deltas.append(event["delta"])
                 costs.append(event["inference_ms"])
-                latencies.append(
-                    1000 * (time.perf_counter() - start) - event["audio_ms"]
-                )
+                latencies.append(1000 * (time.perf_counter() - start) - event["audio_ms"])
                 if event["done"]:
                     await sender
                     assert "".join(deltas) == event["text"], event
@@ -92,9 +90,7 @@ async def replay(url, pcm, headers):
                         "audio_s": len(pcm) / 32000,
                         "first_text_ms": round(first * 1000),
                         "frame_latency_p95_ms": round(
-                            sorted(latencies)[
-                                min(len(latencies) - 1, int(len(latencies) * 0.95))
-                            ]
+                            sorted(latencies)[min(len(latencies) - 1, int(len(latencies) * 0.95))]
                         ),
                         "inference_mean_ms": round(statistics.mean(costs), 1),
                         "final_lag_ms": round(latencies[-1]),
@@ -113,10 +109,7 @@ async def main(args):
     sources = [load_pcm(path, args.seconds) for path in args.audio]
     report = {"single": [await replay(url, pcm, headers) for pcm in sources]}
     report["concurrent"] = await asyncio.gather(
-        *[
-            replay(url, sources[i % len(sources)], headers)
-            for i in range(args.concurrency)
-        ]
+        *[replay(url, sources[i % len(sources)], headers) for i in range(args.concurrency)]
     )
     # Greedy decoding is not bitwise invariant to GPU batching. Record small
     # recognition changes, reject material changes and matches to another input.
@@ -141,9 +134,7 @@ async def main(args):
         ]
         for result in report["switching"]:
             assert any("\u4e00" <= c <= "\u9fff" for c in result["text"]), result
-            assert sum(c.isascii() and c.isalpha() for c in result["text"]) >= 10, (
-                result
-            )
+            assert sum(c.isascii() and c.isalpha() for c in result["text"]) >= 10, result
         report["long"] = await replay(url, (sources[0] + sources[1]) * 3, headers)
     # Check admission and immediate capacity recovery with idle connections.
     connections = []

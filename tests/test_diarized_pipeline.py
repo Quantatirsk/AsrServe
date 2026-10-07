@@ -1,9 +1,9 @@
 """Exercise independent chunk recognition, alignment, and speaker attribution."""
 
-from contextlib import ExitStack
-from pathlib import Path
 import tempfile
 import unittest
+from contextlib import ExitStack
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -50,9 +50,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         probabilities = np.zeros((1400, 8), dtype=np.float32)
         for span in self.spans:
             column = 0 if span.speaker_id == "speaker-1" else 1
-            probabilities[
-                int(span.start_sec * 100) : int(span.end_sec * 100), column
-            ] = 0.9
+            probabilities[int(span.start_sec * 100) : int(span.end_sec * 100), column] = 0.9
         self.diarization = DiarizationResult(
             segments=self.spans,
             probabilities=probabilities,
@@ -62,9 +60,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         )
         self.diarizer = Mock()
         self.diarizer.diarize.return_value = self.diarization
-        self.context.enter_context(
-            patch.object(settings, "TEMP_DIR", str(self.directory))
-        )
+        self.context.enter_context(patch.object(settings, "TEMP_DIR", str(self.directory)))
         self.context.enter_context(
             patch("app.services.asr.long_audio.get_audio_duration", return_value=14)
         )
@@ -141,9 +137,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         )
         results = [
             ASRSegmentResult("First. ", 0, 3, word_tokens=[WordToken("First", 0, 3)]),
-            ASRSegmentResult(
-                "Brief. ", 0, 1.5, word_tokens=[WordToken("Brief", 0, 1.5)]
-            ),
+            ASRSegmentResult("Brief. ", 0, 1.5, word_tokens=[WordToken("Brief", 0, 1.5)]),
             ASRSegmentResult("Return.", 0, 2, word_tokens=[WordToken("Return", 0, 2)]),
         ]
         visible = prepared.finish(results, 1, word_timestamps=True)
@@ -154,17 +148,13 @@ class DiarizedPipelineTest(unittest.TestCase):
         self.assertEqual(hidden.segments[0].text, visible.segments[0].text)
         self.assertEqual(hidden.text, "First. \nBrief. \nReturn.")
         self.assertIsNone(hidden.segments[0].word_tokens)
-        self.assertEqual(
-            [word.start_time for word in visible.segments[0].word_tokens], [0, 3, 4.5]
-        )
+        self.assertEqual([word.start_time for word in visible.segments[0].word_tokens], [0, 3, 4.5])
         self.assertEqual(visible.segments[0].start_time, 10)
         self.assertEqual(visible.segments[0].end_time, 16.5)
         self.assertEqual(visible.speaker_segments, spans)
         self.assertEqual(hidden.speaker_segments, spans)
         scaled = prepared.finish(results, 2, word_timestamps=True)
-        self.assertEqual(
-            [group.speaker_id for group in scaled.segments], ["A", "B", "A"]
-        )
+        self.assertEqual([group.speaker_id for group in scaled.segments], ["A", "B", "A"])
         self.assertEqual(scaled.segments[1].start_time, 26)
         self.assertEqual(scaled.segments[1].word_tokens[0].end_time, 3)
         self.assertEqual(scaled.speaker_segments[1].start_sec, 26)
@@ -196,9 +186,7 @@ class DiarizedPipelineTest(unittest.TestCase):
             [word.text for segment in result.segments for word in segment.word_tokens],
             ["First", "Yes", "Mixed", "After"],
         )
-        self.assertTrue(
-            all(segment.word_tokens[0].start_time == 0 for segment in result.segments)
-        )
+        self.assertTrue(all(segment.word_tokens[0].start_time == 0 for segment in result.segments))
         self.assertAlmostEqual(result.segments[1].word_tokens[0].end_time, 0.2)
         self.assertEqual(
             [(span.start_sec, span.end_sec) for span in result.speaker_segments],
@@ -218,9 +206,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         self.assert_cleaned()
 
     def test_disabled_labels_still_detect_activity_without_alignment(self) -> None:
-        result = self.transcribe(
-            enable_speaker_diarization=False, word_timestamps=False
-        )
+        result = self.transcribe(enable_speaker_diarization=False, word_timestamps=False)
         self.diarizer.diarize.assert_called_once_with(str(self.source))
         self.engine.aligner.align_transcript.assert_not_called()
         self.assertEqual(len(result.segments), 2)
@@ -249,9 +235,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         result = self.transcribe(word_timestamps=True)
         self.assertEqual(self.recognize.call_count, 2)
         self.assertEqual(result.text, "First. Yes! Mixed.\nAfter.")
-        self.assertTrue(
-            all(segment.speaker_id == "说话人1" for segment in result.segments)
-        )
+        self.assertTrue(all(segment.speaker_id == "说话人1" for segment in result.segments))
         self.assertEqual(result.speaker_segments, [])
         self.assert_cleaned()
 
@@ -262,9 +246,7 @@ class DiarizedPipelineTest(unittest.TestCase):
             [], np.zeros((1400, 8)), 0.01, 14, (None,) * 8
         )
         self.recognize.side_effect = ["quiet speech", "short"]
-        result = self.transcribe(
-            enable_speaker_diarization=False, word_timestamps=False
-        )
+        result = self.transcribe(enable_speaker_diarization=False, word_timestamps=False)
         self.assertEqual(result.text, "quiet speech\nshort")
         self.assertEqual(self.recognize.call_count, 2)
         self.engine.aligner.align_transcript.assert_not_called()
@@ -289,9 +271,7 @@ class DiarizedPipelineTest(unittest.TestCase):
         self.assert_cleaned()
 
         self.recognize.side_effect = ["First. Yes! Mixed.", "After."]
-        self.engine.aligner.align_transcript.side_effect = RuntimeError(
-            "Alignment failed"
-        )
+        self.engine.aligner.align_transcript.side_effect = RuntimeError("Alignment failed")
         with self.assertRaisesRegex(RuntimeError, "Alignment failed"):
             self.transcribe()
         self.assert_cleaned()

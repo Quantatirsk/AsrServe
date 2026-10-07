@@ -15,9 +15,7 @@ class R2T2GPUConfigTest(unittest.TestCase):
             llm_engine=SimpleNamespace(
                 vllm_config=SimpleNamespace(
                     model_config=SimpleNamespace(
-                        hf_config=SimpleNamespace(
-                            timestamp_token_id=42, timestamp_segment_time=80
-                        )
+                        hf_config=SimpleNamespace(timestamp_token_id=42, timestamp_segment_time=80)
                     )
                 )
             )
@@ -54,9 +52,7 @@ class R2T2GPUConfigTest(unittest.TestCase):
     def test_invalid_memory_budget_is_rejected(self) -> None:
         for value in ("0", "1.01", "nan", "inf", "invalid"):
             with (
-                patch.dict(
-                    os.environ, {"FORCED_ALIGNER_GPU_MEMORY_UTILIZATION": value}
-                ),
+                patch.dict(os.environ, {"FORCED_ALIGNER_GPU_MEMORY_UTILIZATION": value}),
                 self.assertRaises(ValueError),
             ):
                 _gpu_memory_utilization()

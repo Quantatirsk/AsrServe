@@ -2173,9 +2173,9 @@ pub fn bidirectional_attention(
 }
 
 /// Two-pass causal attention using BLAS sgemm with head-contiguous KV cache.
-/// K/V layout: `[head][pos][head_dim]` — each head's data is contiguous across positions.
+/// K/V layout: `[head][pos][head_dim]` -- each head's data is contiguous across positions.
 ///
-/// Single-token (seq_q=1): online softmax with NEON dot products — avoids BLAS overhead,
+/// Single-token (seq_q=1): online softmax with NEON dot products -- avoids BLAS overhead,
 /// scores allocation, and fuses all 3 passes into a single scan over KV positions.
 ///
 /// Multi-token (seq_q>1): for long sequences, use per-head batched GEMMs;

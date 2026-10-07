@@ -1,29 +1,29 @@
-# -*- coding: utf-8 -*-
 """
 统一异常处理模块
 定义所有自定义异常类和错误处理函数
 """
 
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
+from typing import Any
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
-import logging
-from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
 def get_iso_timestamp() -> str:
     """获取ISO 8601格式的UTC时间戳"""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def create_error_response(
     error_code: str,
     message: str,
     task_id: str = "",
-    details: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     创建标准错误响应格式
 
@@ -59,7 +59,7 @@ class APIException(Exception):
         message: str,
         task_id: str = "",
         error_code: str = "",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         self.status_code = status_code
         self.message = message
@@ -78,7 +78,7 @@ class APIException(Exception):
         }
         return code_mapping.get(status_code, "UNKNOWN_ERROR")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         将异常转换为标准错误响应字典
 
@@ -97,28 +97,28 @@ class APIException(Exception):
 class AuthenticationException(APIException):
     """身份认证异常"""
 
-    def __init__(self, message: str, task_id: str = "", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, task_id: str = "", details: dict[str, Any] | None = None):
         super().__init__(40000001, message, task_id, details=details)
 
 
 class InvalidMessageException(APIException):
     """无效消息异常"""
 
-    def __init__(self, message: str, task_id: str = "", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, task_id: str = "", details: dict[str, Any] | None = None):
         super().__init__(40000002, message, task_id, details=details)
 
 
 class InvalidParameterException(APIException):
     """无效参数异常"""
 
-    def __init__(self, message: str, task_id: str = "", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, task_id: str = "", details: dict[str, Any] | None = None):
         super().__init__(40000003, message, task_id, details=details)
 
 
 class DefaultServerErrorException(APIException):
     """默认服务端错误异常"""
 
-    def __init__(self, message: str, task_id: str = "", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, task_id: str = "", details: dict[str, Any] | None = None):
         super().__init__(50000000, message, task_id, details=details)
 
 
@@ -144,12 +144,12 @@ async def api_exception_handler(request: Request, exc: Exception) -> JSONRespons
 
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """通用异常处理器"""
-    logger.error(f"未处理的异常: {str(exc)}", exc_info=True)
+    logger.error(f"未处理的异常: {exc!s}", exc_info=True)
 
     # 使用标准错误格式
     response_data = create_error_response(
         error_code="DEFAULT_SERVER_ERROR",
-        message=f"内部服务错误: {str(exc)}",
+        message=f"内部服务错误: {exc!s}",
     )
 
     return JSONResponse(content=response_data, status_code=500)

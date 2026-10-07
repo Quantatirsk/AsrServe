@@ -1,14 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 通用工具函数
 包含任务ID生成、参数验证等通用功能
 """
 
-import uuid
 import hashlib
-import time
 import re
-from typing import Optional
+import time
+import uuid
 
 
 def generate_task_id(prefix: str = "") -> str:
@@ -57,7 +55,7 @@ def validate_text_input(text: str, max_length: int = 10000) -> tuple[bool, str]:
     return True, "验证通过"
 
 
-def parse_language_code(lang_code: Optional[str]) -> str:
+def parse_language_code(lang_code: str | None) -> str:
     """解析语言代码
 
     Args:

@@ -46,6 +46,4 @@ async def config(request: Request):
         # The gateway, not the private engine, adds Nemotron utterance labels.
         return dict(await get_capabilities(), speaker_diarization=True)
     except StreamError as error:
-        return JSONResponse(
-            {"error": str(error), "code": error.code}, status_code=error.status
-        )
+        return JSONResponse({"error": str(error), "code": error.code}, status_code=error.status)

@@ -24,9 +24,7 @@ class SegmentBoundsTest(unittest.TestCase):
             ):
                 self.assertEqual(segments[0][0], 0)
                 self.assertEqual(segments[-1][1], duration)
-                self.assertTrue(
-                    all(0 < end - start <= 60000 for start, end in segments)
-                )
+                self.assertTrue(all(0 < end - start <= 60000 for start, end in segments))
                 self.assertEqual(sum(end - start for start, end in segments), duration)
                 self.assertTrue(all(a[1] == b[0] for a, b in pairwise(segments)))
 
@@ -43,9 +41,7 @@ class SegmentBoundsTest(unittest.TestCase):
             speaker_ids=("说话人1", "说话人2") + (None,) * 6,
         )
         # Overlapping turns become one span; the 70-90 s gap is a cut hint.
-        self.assertEqual(
-            overlapping.speech_intervals_ms(), [(1000, 70000), (90000, 95000)]
-        )
+        self.assertEqual(overlapping.speech_intervals_ms(), [(1000, 70000), (90000, 95000)])
 
         audio = np.zeros(95 * 16000, dtype=np.float32)
         with (
@@ -97,9 +93,7 @@ class SegmentBoundsTest(unittest.TestCase):
         size = 125 * 16000
         signals = {
             "silence": np.zeros(size, dtype=np.float32),
-            "quiet_noise": np.random.default_rng(7)
-            .normal(0, 0.0001, size)
-            .astype(np.float32),
+            "quiet_noise": np.random.default_rng(7).normal(0, 0.0001, size).astype(np.float32),
         }
         for name, audio in signals.items():
             with (
@@ -135,9 +129,7 @@ class SegmentBoundsTest(unittest.TestCase):
                 "original.wav", directory, speech_segments=[]
             )
             self.assertGreater(len(segments), 1)
-            self.assertTrue(
-                all(len(item.audio_data) <= 60 * 16000 for item in segments)
-            )
+            self.assertTrue(all(len(item.audio_data) <= 60 * 16000 for item in segments))
             self.assertEqual(sum(len(item.audio_data) for item in segments), len(audio))
 
 

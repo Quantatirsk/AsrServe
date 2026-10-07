@@ -1,7 +1,7 @@
 //! CPU-only Qwen3-ASR speech recognition in pure Rust.
 //!
 //! BLAS and SIMD optimizations are selected automatically at compile time based
-//! on the target platform — Accelerate + NEON on macOS/aarch64, OpenBLAS + AVX2
+//! on the target platform -- Accelerate + NEON on macOS/aarch64, OpenBLAS + AVX2
 //! on Linux/x86_64, etc. For best performance on x86_64, build with:
 //!
 //! ```bash
@@ -9,7 +9,7 @@
 //! ```
 //!
 //! **Important:** Always build in release mode (`--release`). Debug builds are
-//! 10–50x slower and unusable for real-time inference.
+//! 10-50x slower and unusable for real-time inference.
 //!
 //! # Quick Start
 //!
@@ -35,7 +35,7 @@
 //! let samples: Vec<f32> = vec![]; // 16 kHz mono f32 PCM
 //! let results = align::forced_align(&mut ctx, &samples, "Hello world", "English").unwrap();
 //! for r in &results {
-//!     println!("{}: {:.0} – {:.0} ms", r.text, r.start_ms, r.end_ms);
+//!     println!("{}: {:.0} - {:.0} ms", r.text, r.start_ms, r.end_ms);
 //! }
 //! ```
 //!
@@ -43,7 +43,7 @@
 //!
 //! | Module | Purpose |
 //! |--------|---------|
-//! | [`context`] | Engine state — start here with [`context::QwenCtx::load`] |
+//! | [`context`] | Engine state -- start here with [`context::QwenCtx::load`] |
 //! | [`transcribe`] | Offline, segmented, and streaming transcription |
 //! | [`audio`] | WAV loading, resampling, mel spectrogram |
 //! | [`align`] | Forced alignment (word/character timestamps) |

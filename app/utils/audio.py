@@ -1,29 +1,30 @@
-# -*- coding: utf-8 -*-
 """
 统一音频处理工具
 ASR音频处理功能
 """
 
-import os
-import tempfile
-import requests
-import librosa
-import soundfile as sf
-import torchaudio
-import torch
-import numpy as np
-import subprocess
 import logging
+import os
+import subprocess
+import tempfile
 from dataclasses import dataclass
-from typing import Tuple, Optional, Any, cast
 from io import BytesIO
+from typing import Any, cast
+
+import librosa
+import numpy as np
+import requests
+import soundfile as sf
+import torch
+import torchaudio
 
 from ..core.config import settings
 from ..core.exceptions import (
-    InvalidParameterException,
-    InvalidMessageException,
     DefaultServerErrorException,
+    InvalidMessageException,
+    InvalidParameterException,
 )
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +34,7 @@ class NormalizedAudio:
     timestamp_scale: float = 1.0
 
 
-def download_audio_from_url(url: str, max_size: Optional[int] = None) -> bytes:
+def download_audio_from_url(url: str, max_size: int | None = None) -> bytes:
     """从URL下载音频文件
 
     Args:
@@ -76,7 +77,7 @@ def download_audio_from_url(url: str, max_size: Optional[int] = None) -> bytes:
         return audio_data.getvalue()
 
     except requests.RequestException as e:
-        raise InvalidParameterException(f"下载音频文件失败: {str(e)}")
+        raise InvalidParameterException(f"下载音频文件失败: {e!s}")
 
 
 def save_audio_to_temp_file(audio_data: bytes, suffix: str = ".wav") -> str:
@@ -99,7 +100,7 @@ def save_audio_to_temp_file(audio_data: bytes, suffix: str = ".wav") -> str:
             temp_file.write(audio_data)
             return temp_file.name
     except Exception as e:
-        raise DefaultServerErrorException(f"保存音频文件失败: {str(e)}")
+        raise DefaultServerErrorException(f"保存音频文件失败: {e!s}")
 
 
 def cleanup_temp_file(file_path: str) -> None:
@@ -116,7 +117,7 @@ def cleanup_temp_file(file_path: str) -> None:
         pass
 
 
-def load_audio_file(audio_path: str, target_sr: int = 16000) -> Tuple[np.ndarray, int]:
+def load_audio_file(audio_path: str, target_sr: int = 16000) -> tuple[np.ndarray, int]:
     """加载音频文件并转换为指定采样率
 
     Args:
@@ -134,7 +135,7 @@ def load_audio_file(audio_path: str, target_sr: int = 16000) -> Tuple[np.ndarray
         audio_data, sr = librosa.load(audio_path, sr=target_sr)
         return audio_data, int(sr)
     except Exception as e:
-        raise DefaultServerErrorException(f"加载音频文件失败: {str(e)}")
+        raise DefaultServerErrorException(f"加载音频文件失败: {e!s}")
 
 
 def get_audio_duration(audio_path: str) -> float:
@@ -155,10 +156,10 @@ def get_audio_duration(audio_path: str) -> float:
         duration = librosa.get_duration(y=y, sr=sr)
         return duration
     except Exception as e:
-        raise DefaultServerErrorException(f"获取音频时长失败: {str(e)}")
+        raise DefaultServerErrorException(f"获取音频时长失败: {e!s}")
 
 
-def get_container_duration(audio_path: str) -> Optional[float]:
+def get_container_duration(audio_path: str) -> float | None:
     """通过 ffprobe 获取音频容器的 metadata 时长
 
     对于 m4a/AAC 等压缩格式，容器记录的时长可能与实际解码样本数不一致
@@ -166,9 +167,19 @@ def get_container_duration(audio_path: str) -> Optional[float]:
     """
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
-            capture_output=True, text=True, timeout=10,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                audio_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
@@ -231,11 +242,7 @@ def resample_audio_array(
             if audio_array.shape[0] > audio_array.shape[1]:
                 audio_1d = audio_array[0, :]
             else:
-                audio_1d = (
-                    audio_array[:, 0]
-                    if audio_array.shape[1] > 1
-                    else audio_array.flatten()
-                )
+                audio_1d = audio_array[:, 0] if audio_array.shape[1] > 1 else audio_array.flatten()
         else:
             audio_1d = audio_array
 
@@ -246,7 +253,7 @@ def resample_audio_array(
         return resampled
 
     except Exception as e:
-        logger.warning(f"音频重采样失败: {str(e)}，使用原始音频")
+        logger.warning(f"音频重采样失败: {e!s}，使用原始音频")
         return audio_array
 
 
@@ -288,7 +295,7 @@ def save_audio_array(
     output_path: str,
     sample_rate: int = 22050,
     format: str = "wav",
-    original_sr: Optional[int] = None,
+    original_sr: int | None = None,
     volume: int = 50,
 ) -> str:
     """保存音频数组到文件
@@ -347,11 +354,11 @@ def save_audio_array(
         return output_path
 
     except Exception as e:
-        raise DefaultServerErrorException(f"保存音频文件失败: {str(e)}")
+        raise DefaultServerErrorException(f"保存音频文件失败: {e!s}")
 
 
 def convert_audio_to_wav(
-    input_path: str, output_path: Optional[str] = None, target_sr: int = 16000
+    input_path: str, output_path: str | None = None, target_sr: int = 16000
 ) -> str:
     """转换音频文件为WAV格式
 
@@ -403,9 +410,7 @@ def convert_audio_to_wav(
             text=True,
         )
     except subprocess.CalledProcessError as exc:
-        raise DefaultServerErrorException(
-            f"Audio conversion failed: {exc.stderr.strip()}"
-        ) from exc
+        raise DefaultServerErrorException(f"Audio conversion failed: {exc.stderr.strip()}") from exc
     except OSError as exc:
         raise DefaultServerErrorException(f"Cannot run FFmpeg: {exc}") from exc
     return output_path
@@ -421,7 +426,7 @@ def normalize_audio_for_asr(audio_path: str, target_sr: int = 16000) -> Normaliz
     Returns:
         Normalized audio path and timestamp scale metadata.
     """
-    normalized_path: Optional[str] = None
+    normalized_path: str | None = None
     try:
         # 检查文件扩展名
         file_ext = os.path.splitext(audio_path)[1].lower()
@@ -442,9 +447,7 @@ def normalize_audio_for_asr(audio_path: str, target_sr: int = 16000) -> Normaliz
 
         # 转换为标准WAV格式
         normalized_path = audio_path + ".normalized.wav"
-        convert_audio_to_wav(
-            audio_path, output_path=normalized_path, target_sr=target_sr
-        )
+        convert_audio_to_wav(audio_path, output_path=normalized_path, target_sr=target_sr)
         logger.debug(f"音频文件已标准化: {audio_path} -> {normalized_path}")
 
         timestamp_scale = 1.0
@@ -457,7 +460,7 @@ def normalize_audio_for_asr(audio_path: str, target_sr: int = 16000) -> Normaliz
     except Exception as e:
         if normalized_path is not None:
             cleanup_temp_file(normalized_path)
-        raise DefaultServerErrorException(f"音频标准化失败: {str(e)}")
+        raise DefaultServerErrorException(f"音频标准化失败: {e!s}")
 
 
 def generate_temp_audio_path(prefix: str = "audio", suffix: str = ".wav") -> str:
@@ -509,9 +512,7 @@ def detect_audio_format_from_bytes(data: bytes) -> str:
     return ".wav"
 
 
-def get_audio_file_suffix(
-    audio_address: Optional[str] = None, audio_data: Optional[bytes] = None
-) -> str:
+def get_audio_file_suffix(audio_address: str | None = None, audio_data: bytes | None = None) -> str:
     """自动识别音频文件后缀
 
     Args:
@@ -523,7 +524,7 @@ def get_audio_file_suffix(
     """
     if audio_address:
         # 从URL中提取扩展名
-        from urllib.parse import urlparse, unquote
+        from urllib.parse import unquote, urlparse
 
         parsed = urlparse(audio_address)
         path = unquote(parsed.path)
@@ -531,8 +532,20 @@ def get_audio_file_suffix(
         # 获取扩展名
         ext = os.path.splitext(path)[1].lower()
         if ext and ext in [
-            ".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".pcm", ".webm",
-            ".mp4", ".mpeg", ".mpga", ".mov", ".mkv", ".avi",
+            ".wav",
+            ".mp3",
+            ".flac",
+            ".ogg",
+            ".m4a",
+            ".aac",
+            ".pcm",
+            ".webm",
+            ".mp4",
+            ".mpeg",
+            ".mpga",
+            ".mov",
+            ".mkv",
+            ".avi",
         ]:
             return ext
 

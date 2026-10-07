@@ -88,9 +88,7 @@ class ProtocolTest(unittest.TestCase):
                     second.send_json({"context": " English"})
                     second.receive_json()
                     with client.websocket_connect("/v1/stream") as third:
-                        self.assertEqual(
-                            third.receive_json()["code"], "capacity_exceeded"
-                        )
+                        self.assertEqual(third.receive_json()["code"], "capacity_exceeded")
                     first.send_bytes(b"\0" * (4 * CHUNK_SAMPLES))
                     second.send_bytes(b"\0" * (4 * CHUNK_SAMPLES))
                     self.assertEqual(first.receive_json()["delta"], "中文")
@@ -133,9 +131,7 @@ class ProtocolTest(unittest.TestCase):
         with TestClient(app) as client:
             self.assertEqual(client.get("/v1/config").status_code, 401)
             self.assertEqual(
-                client.get(
-                    "/v1/config", headers={"Authorization": "Bearer private"}
-                ).status_code,
+                client.get("/v1/config", headers={"Authorization": "Bearer private"}).status_code,
                 200,
             )
 
@@ -148,9 +144,7 @@ class AsyncTest(unittest.IsolatedAsyncioTestCase):
         async def generate(*args, **kwargs):
             yield SimpleNamespace(
                 outputs=[
-                    SimpleNamespace(
-                        text="language English<asr_text>Hello.", finish_reason="stop"
-                    )
+                    SimpleNamespace(text="language English<asr_text>Hello.", finish_reason="stop")
                 ]
             )
 

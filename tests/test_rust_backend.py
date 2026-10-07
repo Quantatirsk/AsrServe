@@ -17,9 +17,7 @@ from app.services.realtime.rust_engine import AUDIO_PAD, RustAsyncEngine, Sampli
 
 
 class RustBackendTest(unittest.TestCase):
-    def make_backend(
-        self, payload: object, aligner: bool = False
-    ) -> tuple[RustBackend, Mock]:
+    def make_backend(self, payload: object, aligner: bool = False) -> tuple[RustBackend, Mock]:
         self.buffer = ctypes.create_string_buffer(json.dumps(payload).encode())
         library = Mock()
         library.qwen_asr_load_model.return_value = 123
@@ -36,20 +34,14 @@ class RustBackendTest(unittest.TestCase):
         return backend, library
 
     def test_native_buffers_validation_and_single_owned_handle(self) -> None:
-        backend, library = self.make_backend(
-            {"token_ids": [1, 2], "finish_reason": "stop"}
-        )
+        backend, library = self.make_backend({"token_ids": [1, 2], "finish_reason": "stop"})
         try:
             result = backend.generate_pcm(np.zeros(10), [1], [2], 10)
             self.assertEqual(result, NativeGeneration([1, 2], "stop"))
             args = library.qwen_asr_generate_pcm.call_args.args
-            self.assertEqual(
-                (args[0], args[2], args[4], args[6], args[7]), (123, 10, 1, 1, 10)
-            )
+            self.assertEqual((args[0], args[2], args[4], args[6], args[7]), (123, 10, 1, 1, 10))
             library.qwen_asr_load_model.assert_called_once()
-            library.qwen_asr_free_string.assert_called_once_with(
-                ctypes.addressof(self.buffer)
-            )
+            library.qwen_asr_free_string.assert_called_once_with(ctypes.addressof(self.buffer))
             for audio in (np.empty(0), np.zeros((2, 2)), np.array([np.nan])):
                 with self.assertRaises(ValueError):
                     backend.generate_pcm(audio, [1], [2], 10)
@@ -66,9 +58,7 @@ class RustBackendTest(unittest.TestCase):
             backend.generate_pcm(np.zeros(10), [1], [2], 10)
 
     def test_invalid_native_payload_still_frees_string(self) -> None:
-        backend, library = self.make_backend(
-            {"token_ids": "bad", "finish_reason": "stop"}
-        )
+        backend, library = self.make_backend({"token_ids": "bad", "finish_reason": "stop"})
         try:
             with self.assertRaises(RuntimeError):
                 backend.generate_pcm(np.zeros(10), [1], [2], 10)
@@ -85,16 +75,12 @@ class RustBackendTest(unittest.TestCase):
             aligner=True,
         )
         try:
-            result = backend.align_transcript(
-                "audio.wav", "Hello world", np.zeros(16000)
-            )
+            result = backend.align_transcript("audio.wav", "Hello world", np.zeros(16000))
             self.assertEqual([item["text"] for item in result], ["Hello", "world"])
             spans = [item[key] for item in result for key in ("start_ms", "end_ms")]
             self.assertEqual(spans, sorted(spans))
             self.assertEqual((spans[0], spans[-1]), (0, 1000))
-            self.assertEqual(
-                library.qwen_asr_force_align_file.call_args.args[-1], b"English"
-            )
+            self.assertEqual(library.qwen_asr_force_align_file.call_args.args[-1], b"English")
         finally:
             backend.close()
 
@@ -155,9 +141,7 @@ class RustSchedulingTest(unittest.IsolatedAsyncioTestCase):
 
     async def collect(self, number: int, priority: int = 0) -> str:
         prompt = {"prompt": str(number), "multi_modal_data": {"audio": [np.zeros(10)]}}
-        async for result in self.engine.generate(
-            prompt, SamplingParams(16), str(number), priority
-        ):
+        async for result in self.engine.generate(prompt, SamplingParams(16), str(number), priority):
             return result.outputs[0].text
         raise AssertionError("Missing result")
 

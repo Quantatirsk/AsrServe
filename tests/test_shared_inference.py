@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np
 from fastapi.testclient import TestClient
+from test_realtime import FakeModel
 
 from app.core.config import settings
 from app.services.realtime.engine import Model
@@ -17,7 +18,6 @@ from app.services.realtime.protocol import (
     StreamError,
 )
 from app.services.realtime.server import create_app, offline_result
-from test_realtime import FakeModel
 
 
 class SharedServerTest(unittest.TestCase):
@@ -56,9 +56,7 @@ class SharedServerTest(unittest.TestCase):
             "Content-Type": "application/octet-stream",
         }
         with TestClient(app) as client:
-            self.assertEqual(
-                client.post("/v1/transcribe", content=b"0000").status_code, 401
-            )
+            self.assertEqual(client.post("/v1/transcribe", content=b"0000").status_code, 401)
             for body in (
                 b"",
                 b"odd",
@@ -66,23 +64,17 @@ class SharedServerTest(unittest.TestCase):
                 b"0" * (60 * 16000 * 4 + 4),
             ):
                 with self.subTest(length=len(body)):
-                    response = client.post(
-                        "/v1/transcribe", content=body, headers=headers
-                    )
+                    response = client.post("/v1/transcribe", content=body, headers=headers)
                     self.assertIn(response.status_code, (400, 413))
                     self.assertFalse(app.state.offline_active)
             app.state.offline_active = OFFLINE_CONCURRENCY
             self.assertEqual(
-                client.post(
-                    "/v1/transcribe", content=b"0000", headers=headers
-                ).status_code,
+                client.post("/v1/transcribe", content=b"0000", headers=headers).status_code,
                 503,
             )
             app.state.offline_active = OFFLINE_CONCURRENCY - 1
             self.assertEqual(
-                client.post(
-                    "/v1/transcribe", content=b"0000", headers=headers
-                ).status_code,
+                client.post("/v1/transcribe", content=b"0000", headers=headers).status_code,
                 200,
             )
         model.transcribe.assert_awaited_once()
@@ -204,11 +196,7 @@ class SharedGenerationTest(unittest.IsolatedAsyncioTestCase):
         async def generate(*args, **kwargs):
             calls.append(kwargs)
             yield SimpleNamespace(
-                outputs=[
-                    SimpleNamespace(
-                        text="language None<asr_text>", finish_reason="stop"
-                    )
-                ]
+                outputs=[SimpleNamespace(text="language None<asr_text>", finish_reason="stop")]
             )
 
         model.engine = SimpleNamespace(generate=generate, abort=AsyncMock())
@@ -223,9 +211,7 @@ class SharedGenerationTest(unittest.IsolatedAsyncioTestCase):
             yield None
 
         model.engine = SimpleNamespace(generate=generate, abort=AsyncMock())
-        request = SimpleNamespace(
-            receive=AsyncMock(return_value={"type": "http.disconnect"})
-        )
+        request = SimpleNamespace(receive=AsyncMock(return_value={"type": "http.disconnect"}))
         with self.assertRaises(StreamError) as error:
             await offline_result(request, model, np.ones(16000), "")
         self.assertEqual(error.exception.code, "client_disconnected")

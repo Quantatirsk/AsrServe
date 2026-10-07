@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Infrastructure helpers."""
 
 from .model_utils import (

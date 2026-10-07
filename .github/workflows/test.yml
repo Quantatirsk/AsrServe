@@ -1,0 +1,60 @@
+name: Test
+
+# NOTE: Disabled for now — only runs on manual dispatch.
+# Restore push/pull_request triggers after discussing testing approach with maintainer.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --frozen --extra cpu
+
+      - name: Install development tools
+        run: |
+          uv pip install ruff ty pytest pytest-cov httpx
+
+      - name: Lint with ruff
+        run: |
+          uv run ruff check app/ tests/
+
+      - name: Check formatting with ruff
+        run: |
+          uv run ruff format app/ tests/ --check
+
+      # DISABLED for now - re-enable once type errors are resolved
+      # - name: Type check with ty
+      #   run: |
+      #     uv run ty check app/
+
+      - name: Run tests with coverage
+        env:
+          PYTHONPATH: "."
+        run: |
+          uv run pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=70
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false

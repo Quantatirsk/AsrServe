@@ -46,8 +46,7 @@ class ModelIntegritySpecTest(unittest.TestCase):
                         for index, name in enumerate(names):
                             commit = (
                                 revision
-                                if state == "correct"
-                                or (state == "partial" and index == 0)
+                                if state == "correct" or (state == "partial" and index == 0)
                                 else "0" * 40
                             )
                             (metadata / f"{name}.metadata").write_text(
@@ -58,10 +57,7 @@ class ModelIntegritySpecTest(unittest.TestCase):
                     if state != "correct":
                         self.assertEqual(result["reason"], "required_files_missing")
                         self.assertTrue(
-                            any(
-                                "expected revision" in item
-                                for item in result["missing_patterns"]
-                            )
+                            any("expected revision" in item for item in result["missing_patterns"])
                         )
             (root / "config.json").unlink()
             result = _check_model_integrity_spec(spec)
@@ -87,9 +83,7 @@ class ModelIntegritySpecTest(unittest.TestCase):
             snapshot.mkdir(parents=True)
             (snapshot / "config.json").write_text("{}", encoding="utf-8")
             (snapshot / "model.safetensors.index.json").write_text(
-                json.dumps(
-                    {"weight_map": {"weight": "model-00001-of-00002.safetensors"}}
-                ),
+                json.dumps({"weight_map": {"weight": "model-00001-of-00002.safetensors"}}),
                 encoding="utf-8",
             )
             (snapshot / "model-00001-of-00002.safetensors").write_bytes(b"weights")

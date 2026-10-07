@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """API v1版本路由"""
 
 from fastapi import APIRouter, Request
@@ -8,8 +7,8 @@ from ...core.device import detect_device
 from ...core.exceptions import AuthenticationException
 from ...core.security import validate_token
 from ...services.asr.runtime import get_runtime_router
-from .realtime import router as realtime_router
 from .openai_compatible import router as openai_router
+from .realtime import router as realtime_router
 
 api_router = APIRouter()
 
@@ -36,9 +35,7 @@ async def health(request: Request):
             "device": detect_device(settings.DEVICE) if model_loaded else "unknown",
             "version": settings.APP_VERSION,
             "message": (
-                "ASR service is running normally"
-                if model_loaded
-                else "ASR model not loaded"
+                "ASR service is running normally" if model_loaded else "ASR model not loaded"
             ),
             "loaded_models": loaded_models,
             "memory_usage": runtime_router.get_memory_usage().get("gpu_memory"),
@@ -51,4 +48,3 @@ async def health(request: Request):
             "version": settings.APP_VERSION,
             "message": str(e),
         }
-

@@ -5,12 +5,11 @@ from __future__ import annotations
 import asyncio
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Optional
 
 from app.core.executor import run_sync
 from app.services.asr.engines import ASRFullResult
-from app.services.asr.model_selection import get_default_offline_model_id
 from app.services.asr.long_audio import OfflineASRRequest
+from app.services.asr.model_selection import get_default_offline_model_id
 from app.services.asr.runtime import get_runtime_router
 from app.services.audio import get_audio_service
 
@@ -21,7 +20,7 @@ class OfflineTranscriptionOptions:
     hotwords: str = ""
     enable_speaker_diarization: bool = True
     word_timestamps: bool = False
-    task_id: Optional[str] = None
+    task_id: str | None = None
 
 
 class OfflineTranscriptionService:
@@ -33,10 +32,10 @@ class OfflineTranscriptionService:
     async def start_transcription(
         self,
         *,
-        audio_data: Optional[bytes],
+        audio_data: bytes | None,
         options: OfflineTranscriptionOptions,
-        filename: Optional[str] = None,
-        audio_address: Optional[str] = None,
+        filename: str | None = None,
+        audio_address: str | None = None,
     ) -> asyncio.Task[ASRFullResult]:
         resources = ExitStack()
         try:
@@ -77,7 +76,7 @@ class OfflineTranscriptionService:
         return task
 
 
-_offline_transcription_service: Optional[OfflineTranscriptionService] = None
+_offline_transcription_service: OfflineTranscriptionService | None = None
 
 
 def get_offline_transcription_service() -> OfflineTranscriptionService:

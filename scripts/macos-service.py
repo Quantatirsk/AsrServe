@@ -2,12 +2,12 @@
 
 import argparse
 import os
-from pathlib import Path
 import plistlib
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 LABEL = "com.asrserve.native"
 
@@ -15,9 +15,7 @@ LABEL = "com.asrserve.native"
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("install", "uninstall"))
-    parser.add_argument(
-        "--alignment-mode", choices=("uniform", "forced"), default="uniform"
-    )
+    parser.add_argument("--alignment-mode", choices=("uniform", "forced"), default="uniform")
     parser.add_argument("--threads", type=int, default=8)
     args = parser.parse_args()
     if sys.platform != "darwin" or os.getuid() == 0:
@@ -59,20 +57,12 @@ def main() -> None:
             "StandardOutPath": str(logs / "launchd.stdout.log"),
             "StandardErrorPath": str(logs / "launchd.stderr.log"),
         }
-    loaded = (
-        subprocess.run(["launchctl", "print", target], capture_output=True).returncode
-        == 0
-    )
+    loaded = subprocess.run(["launchctl", "print", target], capture_output=True).returncode == 0
     if loaded:
         subprocess.run(["launchctl", "bootout", target], check=True)
         # bootout returns before launchd finishes removing the job.
         deadline = time.monotonic() + 60
-        while (
-            subprocess.run(
-                ["launchctl", "print", target], capture_output=True
-            ).returncode
-            == 0
-        ):
+        while subprocess.run(["launchctl", "print", target], capture_output=True).returncode == 0:
             if time.monotonic() >= deadline:
                 raise TimeoutError("Previous ASR service has not stopped")
             time.sleep(0.2)
@@ -80,11 +70,7 @@ def main() -> None:
         agent.unlink(missing_ok=True)
         print("Native ASR login service removed; models and logs retained")
         return
-    names = (
-        subprocess.check_output(["git", "ls-files", "-z"], cwd=source)
-        .decode()
-        .split("\0")
-    )
+    names = subprocess.check_output(["git", "ls-files", "-z"], cwd=source).decode().split("\0")
     for name in filter(None, names):
         original = source / name
         if original.is_file():

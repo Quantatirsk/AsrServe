@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 模型预加载工具
 在应用启动时预加载所有需要的模型,避免首次请求时的延迟
@@ -60,13 +59,10 @@ def _check_model_integrity_spec(spec: ModelIntegritySpec) -> dict[str, Any]:
     missing_patterns = _find_missing_patterns(spec.path, spec.required_patterns)
     if not missing_patterns and spec.alternative_required_patterns:
         alternative_missing_patterns = [
-            _find_missing_patterns(spec.path, group)
-            for group in spec.alternative_required_patterns
+            _find_missing_patterns(spec.path, group) for group in spec.alternative_required_patterns
         ]
         if all(alternative_missing_patterns):
-            missing_patterns = [
-                _format_alternative_patterns(spec.alternative_required_patterns)
-            ]
+            missing_patterns = [_format_alternative_patterns(spec.alternative_required_patterns)]
 
     for index_path in spec.path.glob("model.safetensors.index.json"):
         import json
@@ -88,9 +84,7 @@ def _check_model_integrity_spec(spec: ModelIntegritySpec) -> dict[str, Any]:
             if not metadata.is_file() or metadata.read_text().splitlines()[:1] != [
                 spec.expected_revision
             ]:
-                missing_patterns.append(
-                    f"{name}: expected revision {spec.expected_revision}"
-                )
+                missing_patterns.append(f"{name}: expected revision {spec.expected_revision}")
 
     for name, expected_hash in spec.file_hashes:
         path = spec.path / name
@@ -132,8 +126,8 @@ def _check_model_integrity_spec(spec: ModelIntegritySpec) -> dict[str, Any]:
 
 def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
     from app.infrastructure import (
-        get_huggingface_model_cache_dir,
         find_huggingface_snapshot_dir,
+        get_huggingface_model_cache_dir,
     )
     from app.services.asr.model_capabilities import (
         get_model_assets,
@@ -169,8 +163,7 @@ def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
 
 def verify_required_models_integrity(use_logger: bool = True) -> dict[str, Any]:
     results = [
-        _check_model_integrity_spec(spec)
-        for spec in _build_required_model_integrity_specs()
+        _check_model_integrity_spec(spec) for spec in _build_required_model_integrity_specs()
     ]
     invalid = [result for result in results if not result["ok"]]
     for result in results:
@@ -185,8 +178,8 @@ def verify_required_models_integrity(use_logger: bool = True) -> dict[str, Any]:
 def preload_models() -> dict[str, Any]:
     """Load every required component; startup must not silently degrade."""
     from app.services.asr.runtime import get_runtime_router
-    from app.services.realtime.protocol import MODEL_ID
     from app.services.realtime.client import get_engine_capabilities
+    from app.services.realtime.protocol import MODEL_ID
     from app.utils.speaker_diarizer import get_speaker_diarizer
     from app.services.asr.punctuation import get_punctuation_model
 

@@ -87,9 +87,7 @@ def run(
             if stop.is_set():
                 return 0
             logger.info("Starting %s", service.name)
-            process = subprocess.Popen(
-                service.command, env=service.env, start_new_session=True
-            )
+            process = subprocess.Popen(service.command, env=service.env, start_new_session=True)
             children.append((service.name, process))
             deadline = time.monotonic() + startup_timeout
             while not stop.is_set():
@@ -198,11 +196,7 @@ def main() -> int:
     parser.add_argument("--download-models", action="store_true")
     args = parser.parse_args()
     if args.healthcheck:
-        return (
-            0
-            if healthy(ENGINE_URL, "ready") and healthy(api_url(), "model_loaded")
-            else 1
-        )
+        return 0 if healthy(ENGINE_URL, "ready") and healthy(api_url(), "model_loaded") else 1
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s"
     )

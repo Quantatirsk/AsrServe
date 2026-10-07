@@ -73,9 +73,7 @@ class ModelDownloadTest(unittest.TestCase):
                     )
                 ],
             ),
-            patch(
-                "app.utils.download_models.is_huggingface_offline", return_value=True
-            ),
+            patch("app.utils.download_models.is_huggingface_offline", return_value=True),
             patch("app.utils.download_models.hf_snapshot_download") as download,
         ):
             self.assertFalse(download_models())

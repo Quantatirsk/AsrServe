@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import tempfile
 import time
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator, Optional, Sequence
+from typing import TYPE_CHECKING
 
 from app.core.config import settings
 from app.core.logging import log_inference_metrics
@@ -31,7 +32,7 @@ class OfflineASRRequest:
     enable_speaker_diarization: bool = True
     word_timestamps: bool = False
     timestamp_scale: float = 1.0
-    task_id: Optional[str] = None
+    task_id: str | None = None
 
 
 @dataclass
@@ -122,9 +123,7 @@ def prepare_long_audio(
             # Detection is shared by both modes; the flag only controls labels.
             activity = get_speaker_diarizer().diarize(audio_path)
             if not activity.segments:
-                logger.info(
-                    "Nemotron detected no activity; retaining audio for ASR fallback"
-                )
+                logger.info("Nemotron detected no activity; retaining audio for ASR fallback")
             segments = AudioSplitter().split_audio_file(
                 audio_path,
                 output_dir=directory,

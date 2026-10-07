@@ -235,7 +235,7 @@ fn transcribe_segment(
         );
     }
 
-    // Trim whitespace — convert accumulated bytes to UTF-8 first
+    // Trim whitespace -- convert accumulated bytes to UTF-8 first
     let text = String::from_utf8_lossy(&text_bytes);
     let trimmed = text.trim().to_string();
 
@@ -968,7 +968,7 @@ pub fn stream_push_audio(
         state.enc_cache.push(EncWindow { seq_len: win_seq, enc_output: win_enc });
     }
 
-    // Encode partial tail — with lazy re-encoding for LCP optimization.
+    // Encode partial tail -- with lazy re-encoding for LCP optimization.
     // Only re-encode when enough new audio has accumulated (every 2 chunks),
     // on the first chunk, or when finalizing. On skip chunks, the reused
     // encoder output gives near-perfect LCP matching, cutting prefill cost.
@@ -1298,7 +1298,7 @@ pub fn stream_push_audio(
         ctx.perf_total_ms += elapsed_ms(chunk_t0);
         state.chunk_idx += 1;
 
-        // Stop processing after speech ends — no point encoding more silence
+        // Stop processing after speech ends -- no point encoding more silence
         if speech_ended {
             break;
         }

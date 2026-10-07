@@ -26,9 +26,7 @@ def split_alignment_units(text: str) -> list[str]:
     units = []
     for word in text.split():
         cleaned = "".join(
-            c
-            for c in word
-            if c == "'" or unicodedata.category(c).startswith(("L", "N"))
+            c for c in word if c == "'" or unicodedata.category(c).startswith(("L", "N"))
         )
         buffer = []
         for char in cleaned:

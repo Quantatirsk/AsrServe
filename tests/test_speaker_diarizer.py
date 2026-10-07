@@ -1,10 +1,10 @@
 """Nemotron keeps overlap and recording-local identity without segmenting ASR audio."""
 
-from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
-from types import SimpleNamespace
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -147,9 +147,7 @@ class SpeakerDiarizerTest(unittest.TestCase):
                 diarizer._model.return_value = SimpleNamespace(logits=logits)
                 with self.assertRaises(DefaultServerErrorException):
                     diarizer.diarize("audio.wav")
-            diarizer._model.return_value = SimpleNamespace(
-                logits=torch.zeros(1, 100, 8)
-            )
+            diarizer._model.return_value = SimpleNamespace(logits=torch.zeros(1, 100, 8))
             self.assertEqual(diarizer.diarize("audio.wav").segments, [])
 
     def test_bad_intervals_and_probabilities_are_rejected(self) -> None:

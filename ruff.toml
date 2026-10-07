@@ -1,0 +1,35 @@
+# Ruff configuration for AsrServe
+
+target-version = "py311"
+
+# Line length
+line-length = 100
+
+# Rule selection - start with critical errors only, gradually add more
+lint.select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+]
+
+# Ignore specific rules that are too noisy
+lint.ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "S101",   # use of assert
+    "S311",   # pseudo-random numbers (not cryptographically secure)
+    "B008",   # function call in default argument (FastAPI dependency pattern)
+]
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".venv",
+    "vendor",
+    "build",
+    "dist",
+]
+
+# Formatting
+format.quote-style = "double"
+format.line-ending = "auto"

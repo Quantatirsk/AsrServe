@@ -1,0 +1,48 @@
+# Pre-commit configuration for AsrServe
+# Mirrors the CI checks (ruff lint/format, ty type check) to catch issues early.
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Basic file hygiene checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-ast
+      - id: debug-statements
+      - id: check-json
+
+  # Ruff linting and formatting (same as CI)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Ty type checking (same as CI)
+  # Uses the system-installed ty (installed via uv in CI)
+  # DISABLED for now - re-enable once type errors are resolved
+  # - repo: local
+  #   hooks:
+  #     - id: ty-check
+  #       name: ty type check
+  #       entry: ty check app/
+  #       language: system
+  #       types: [python]
+  #       pass_filenames: false
+  #       always_run: true
+
+  # texthooks - pre-commit checks for handling text files
+  - repo: https://github.com/sirosen/texthooks
+    rev: 0.7.1
+    hooks:
+      - id: fix-spaces
+      - id: fix-smartquotes
+      - id: fix-ligatures
+      - id: fix-unicode-dashes

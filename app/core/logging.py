@@ -1,17 +1,17 @@
-# -*- coding: utf-8 -*-
 """
 日志配置模块
 统一的日志配置和管理，支持多 Worker 模式
 """
 
+import json
 import logging
 import logging.handlers
-import sys
 import os
-import json
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
 from .config import settings
 
 
@@ -42,17 +42,38 @@ class StructuredLogFormatter(logging.Formatter):
         super().__init__()
         self.include_extra = include_extra
         self._reserved_attrs = {
-            'name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
-            'filename', 'module', 'exc_info', 'exc_text', 'stack_info',
-            'lineno', 'funcName', 'created', 'msecs', 'relativeCreated',
-            'thread', 'threadName', 'processName', 'process', 'getMessage',
-            'message', 'asctime'
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "getMessage",
+            "message",
+            "asctime",
         }
 
     def format(self, record: logging.LogRecord) -> str:
         """将日志记录格式化为JSON"""
-        log_data: Dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        log_data: dict[str, Any] = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).strftime(
+                "%Y-%m-%dT%H:%M:%S.%f"
+            )[:-3]
+            + "Z",
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -68,10 +89,7 @@ class StructuredLogFormatter(logging.Formatter):
             exc_type = record.exc_info[0]
             exc_value = record.exc_info[1]
             if exc_type and exc_value:
-                log_data["exception"] = {
-                    "type": exc_type.__name__,
-                    "message": str(exc_value)
-                }
+                log_data["exception"] = {"type": exc_type.__name__, "message": str(exc_value)}
 
         # 添加extra字段中的结构化数据
         if self.include_extra:
@@ -81,11 +99,11 @@ class StructuredLogFormatter(logging.Formatter):
 
         return json.dumps(log_data, ensure_ascii=False, default=str)
 
-    def _extract_extra_data(self, record: logging.LogRecord) -> Dict[str, Any]:
+    def _extract_extra_data(self, record: logging.LogRecord) -> dict[str, Any]:
         """从日志记录中提取extra数据"""
         extra_data = {}
         for key, value in record.__dict__.items():
-            if key not in self._reserved_attrs and not key.startswith('_'):
+            if key not in self._reserved_attrs and not key.startswith("_"):
                 extra_data[key] = value
         return extra_data
 
@@ -102,18 +120,36 @@ class HybridLogFormatter(logging.Formatter):
 
     def __init__(
         self,
-        text_format: Optional[str] = None,
-        json_formatter: Optional[StructuredLogFormatter] = None,
+        text_format: str | None = None,
+        json_formatter: StructuredLogFormatter | None = None,
     ):
         super().__init__()
         self.text_format = text_format or "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         self.json_formatter = json_formatter or StructuredLogFormatter()
         self._reserved_attrs = {
-            'name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
-            'filename', 'module', 'exc_info', 'exc_text', 'stack_info',
-            'lineno', 'funcName', 'created', 'msecs', 'relativeCreated',
-            'thread', 'threadName', 'processName', 'process', 'getMessage',
-            'message', 'asctime'
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "getMessage",
+            "message",
+            "asctime",
         }
 
     def format(self, record: logging.LogRecord) -> str:
@@ -131,7 +167,7 @@ class HybridLogFormatter(logging.Formatter):
     def _has_extra_data(self, record: logging.LogRecord) -> bool:
         """检查日志记录是否包含extra数据"""
         for key in record.__dict__.keys():
-            if key not in self._reserved_attrs and not key.startswith('_'):
+            if key not in self._reserved_attrs and not key.startswith("_"):
                 return True
         return False
 
@@ -166,12 +202,12 @@ def get_structured_logger(name: str) -> logging.Logger:
 def log_inference_metrics(
     logger: logging.Logger,
     message: str,
-    task_id: Optional[str] = None,
-    duration_ms: Optional[float] = None,
-    audio_duration_sec: Optional[float] = None,
-    model_id: Optional[str] = None,
+    task_id: str | None = None,
+    duration_ms: float | None = None,
+    audio_duration_sec: float | None = None,
+    model_id: str | None = None,
     status: str = "success",
-    **kwargs
+    **kwargs,
 ) -> None:
     """记录推理性能指标
 
@@ -187,7 +223,7 @@ def log_inference_metrics(
         status: 状态（success/error）
         **kwargs: 其他结构化数据
     """
-    extra: Dict[str, Any] = {
+    extra: dict[str, Any] = {
         "status": status,
     }
 
@@ -225,12 +261,12 @@ def get_worker_id() -> str:
 
 
 def setup_logging(
-    level: Optional[str] = None,
-    log_file: Optional[str] = None,
-    format_string: Optional[str] = None,
-    max_bytes: Optional[int] = None,
-    backup_count: Optional[int] = None,
-    worker_id: Optional[str] = None,
+    level: str | None = None,
+    log_file: str | None = None,
+    format_string: str | None = None,
+    max_bytes: int | None = None,
+    backup_count: int | None = None,
+    worker_id: str | None = None,
     use_structured: bool = False,
 ) -> None:
     """设置应用日志配置
@@ -253,7 +289,7 @@ def setup_logging(
     # 获取 Worker ID
     current_worker_id = worker_id or get_worker_id()
     workers = int(os.getenv("WORKERS", "1"))
-    worker_log_path: Optional[Path] = None
+    worker_log_path: Path | None = None
 
     # 确定日志格式
     if use_structured:
@@ -262,7 +298,10 @@ def setup_logging(
     else:
         # 使用混合格式（普通日志文本，带extra的JSON）
         if workers > 1:
-            text_format = format_string or f"%(asctime)s - [{current_worker_id}] - %(name)s - %(levelname)s - %(message)s"
+            text_format = (
+                format_string
+                or f"%(asctime)s - [{current_worker_id}] - %(name)s - %(levelname)s - %(message)s"
+            )
         else:
             text_format = format_string or "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         formatter = HybridLogFormatter(text_format=text_format)

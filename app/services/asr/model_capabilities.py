@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 """Shared capability-to-model asset definitions."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from app.core.config import settings
 from app.services.realtime.protocol import MODEL_REPOSITORY, MODEL_REVISION
@@ -15,7 +13,7 @@ from .punctuation import MODEL_HASHES, MODEL_ID, MODEL_REVISION as PUNCTUATION_R
 class ModelAsset:
     model_id: str
     description: str
-    revision: Optional[str] = None
+    revision: str | None = None
     required_patterns: tuple[str, ...] = ()
     alternative_required_patterns: tuple[tuple[str, ...], ...] = ()
     min_total_size_bytes: int = 0

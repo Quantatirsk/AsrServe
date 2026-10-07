@@ -1,27 +1,27 @@
-# -*- coding: utf-8 -*-
 """
 FastAPI应用创建和配置
 """
 
-import warnings
-import os
 import logging
+import os
+import warnings
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from fastapi_offline import FastAPIOffline
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi_offline import FastAPIOffline
 
+from .api.v1 import api_router
 from .core.config import settings
-from .services.asr.runtime import get_runtime_router
 from .core.exceptions import (
     APIException,
     api_exception_handler,
     general_exception_handler,
 )
-from .core.logging import setup_logging
 from .core.executor import shutdown_executor
-from .api.v1 import api_router
+from .core.logging import setup_logging
+from .services.asr.runtime import get_runtime_router
 
 # 忽略 Pydantic V2 兼容性警告
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2")

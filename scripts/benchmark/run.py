@@ -9,17 +9,17 @@ AsrServe 并发性能测试主入口
     python -m scripts.benchmark.run --audio-file /path/to/audio.wav --concurrency 5 10 20
 """
 
-import asyncio
 import argparse
+import asyncio
 import logging
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from .config import TestConfig
 from .clients.asr_client import ASRWebSocketClient
-from .metrics.models import ASRMetrics, AggregatedMetrics
+from .config import TestConfig
+from .metrics.models import AggregatedMetrics, ASRMetrics
 from .metrics.statistics import calculate_statistics
 from .reporters.markdown_reporter import MarkdownReporter
 from .utils.audio_utils import load_audio_file
@@ -79,16 +79,22 @@ class ConcurrentBenchmark:
             # 预热
             logger.info(f"  预热中 ({self.config.warmup_requests} 次请求)...")
             await self._run_asr_concurrent(
-                audio_data, audio_duration_ms, self.config.warmup_requests, level,
-                save_results=False
+                audio_data,
+                audio_duration_ms,
+                self.config.warmup_requests,
+                level,
+                save_results=False,
             )
 
             # 正式测试
             logger.info("  正式测试中...")
             start_time = time.perf_counter()
             metrics_list = await self._run_asr_concurrent(
-                audio_data, audio_duration_ms, level, level,
-                save_results=True  # 正式测试时保存结果
+                audio_data,
+                audio_duration_ms,
+                level,
+                level,
+                save_results=True,  # 正式测试时保存结果
             )
             total_time = time.perf_counter() - start_time
 
@@ -97,7 +103,9 @@ class ConcurrentBenchmark:
             results.append(aggregated)
 
             # 打印结果
-            logger.info(f"  完成: 成功 {aggregated.successful_requests}/{aggregated.total_requests}")
+            logger.info(
+                f"  完成: 成功 {aggregated.successful_requests}/{aggregated.total_requests}"
+            )
             logger.info(f"  首次响应延迟: {aggregated.first_latency_avg:.1f} ms (avg)")
             logger.info(f"  RTF: {aggregated.rtf_avg:.3f} (avg)")
 
@@ -178,9 +186,7 @@ class ConcurrentBenchmark:
         from .reporters.chart_generator import ChartGenerator
 
         chart_generator = ChartGenerator()
-        chart_files = chart_generator.generate_all_charts(
-            asr_results, output_dir, timestamp
-        )
+        chart_files = chart_generator.generate_all_charts(asr_results, output_dir, timestamp)
         for chart_file in chart_files:
             logger.info(f"图表已生成: {chart_file}")
 

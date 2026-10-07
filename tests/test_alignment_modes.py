@@ -9,8 +9,8 @@ import pytest
 
 from app.api.v1.openai_compatible import ResponseFormat, build_transcription_payload
 from app.core.config import Settings, settings
-from app.services.asr.model_capabilities import get_huggingface_assets
 from app.services.asr.long_audio import PreparedLongAudio
+from app.services.asr.model_capabilities import get_huggingface_assets
 from app.services.asr.r2t2_engine import R2T2Engine
 from app.services.asr.uniform_alignment import uniform_word_timestamps
 from app.utils.audio_splitter import AudioSegment
@@ -23,7 +23,7 @@ def test_alignment_mode_validation_and_required_assets() -> None:
             Settings()
     for mode, count in (("uniform", 2), ("forced", 3)):
         with patch.dict(os.environ, {"ALIGNMENT_MODE": mode}):
-            assert Settings().ALIGNMENT_MODE == mode
+            assert mode == Settings().ALIGNMENT_MODE
         with patch.object(settings, "ALIGNMENT_MODE", mode):
             assert len(get_huggingface_assets()) == count
 
@@ -51,16 +51,10 @@ def test_uniform_pipeline_switches_and_serialization(labels: bool, words: bool) 
     with tempfile.NamedTemporaryFile() as source:
         segment = AudioSegment(5000, 7000, temp_file=source.name)
         prepared = PreparedLongAudio([segment], 7, activity if labels else None)
-        context = Mock(
-            __enter__=Mock(return_value=prepared), __exit__=Mock(return_value=False)
-        )
+        context = Mock(__enter__=Mock(return_value=prepared), __exit__=Mock(return_value=False))
         with (
-            patch(
-                "app.services.asr.r2t2_engine.prepare_long_audio", return_value=context
-            ),
-            patch(
-                "app.services.asr.r2t2_engine._load_audio", return_value=np.zeros(32000)
-            ),
+            patch("app.services.asr.r2t2_engine.prepare_long_audio", return_value=context),
+            patch("app.services.asr.r2t2_engine._load_audio", return_value=np.zeros(32000)),
             patch(
                 "app.services.asr.r2t2_engine.transcribe_segment",
                 return_value="\u4f60\u597d\uff0cworld!",
@@ -82,9 +76,7 @@ def test_uniform_pipeline_switches_and_serialization(labels: bool, words: bool) 
             )
         assert align.call_count == int(labels or words)
     assert result.text == "\u4f60\u597d\uff0cworld!"
-    assert result.word_timestamp_method == (
-        "uniform_fallback" if labels or words else None
-    )
+    assert result.word_timestamp_method == ("uniform_fallback" if labels or words else None)
     assert (result.speaker_segments is not None) == labels
     assert bool(result.segments[0].word_tokens) == words
     payload, _, _ = build_transcription_payload(

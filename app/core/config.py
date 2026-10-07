@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 统一配置管理
 ASR语音识别配置选项
@@ -7,9 +6,7 @@ ASR语音识别配置选项
 import math
 import os
 import sys
-from typing import Optional
 from pathlib import Path
-
 
 OFFLINE_MAX_SECONDS = 60
 
@@ -28,7 +25,7 @@ class Settings:
     DEBUG: bool = False
 
     # 鉴权配置
-    API_KEY: Optional[str] = None  # 从环境变量API_KEY读取，如果为None则鉴权可选
+    API_KEY: str | None = None  # 从环境变量API_KEY读取，如果为None则鉴权可选
 
     # 设备配置
     DEVICE: str = "cpu" if sys.platform == "darwin" else "cuda:0"
@@ -40,7 +37,7 @@ class Settings:
     TEMP_DIR: str = "temp"
     # 日志配置
     LOG_LEVEL: str = "INFO"
-    LOG_FILE: Optional[str] = str(BASE_DIR / "logs" / "asrserve.log")
+    LOG_FILE: str | None = str(BASE_DIR / "logs" / "asrserve.log")
     LOG_MAX_BYTES: int = 20 * 1024 * 1024  # 20MB
     LOG_BACKUP_COUNT: int = 50  # 保留50个备份文件
 
@@ -73,9 +70,7 @@ class Settings:
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", self.LOG_LEVEL)
         self.LOG_FILE = os.getenv("LOG_FILE", self.LOG_FILE)
         self.LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", str(self.LOG_MAX_BYTES)))
-        self.LOG_BACKUP_COUNT = int(
-            os.getenv("LOG_BACKUP_COUNT", str(self.LOG_BACKUP_COUNT))
-        )
+        self.LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", str(self.LOG_BACKUP_COUNT)))
 
         # 鉴权配置：空值/空白统一视为未配置
         self.API_KEY = (os.getenv("API_KEY") or "").strip() or None
@@ -85,9 +80,7 @@ class Settings:
         self.ALIGNMENT_MODE = os.getenv("ALIGNMENT_MODE", self.ALIGNMENT_MODE)
         if self.ALIGNMENT_MODE not in {"uniform", "forced"}:
             raise ValueError("ALIGNMENT_MODE must be uniform or forced")
-        self.R2T2_CPU_THREADS = int(
-            os.getenv("R2T2_CPU_THREADS", str(self.R2T2_CPU_THREADS))
-        )
+        self.R2T2_CPU_THREADS = int(os.getenv("R2T2_CPU_THREADS", str(self.R2T2_CPU_THREADS)))
         if self.R2T2_CPU_THREADS < 1:
             raise ValueError("R2T2_CPU_THREADS must be greater than zero")
 
@@ -103,9 +96,7 @@ class Settings:
         if max_audio_size_str:
             self.MAX_AUDIO_SIZE = self._parse_size(max_audio_size_str)
 
-        self.MAX_SEGMENT_SEC = float(
-            os.getenv("MAX_SEGMENT_SEC", str(self.MAX_SEGMENT_SEC))
-        )
+        self.MAX_SEGMENT_SEC = float(os.getenv("MAX_SEGMENT_SEC", str(self.MAX_SEGMENT_SEC)))
         if (
             not math.isfinite(self.MAX_SEGMENT_SEC)
             or not 0 < self.MAX_SEGMENT_SEC <= OFFLINE_MAX_SECONDS
@@ -143,12 +134,12 @@ class Settings:
         os.makedirs(self.TEMP_DIR, exist_ok=True)
 
     @property
-    def docs_url(self) -> Optional[str]:
+    def docs_url(self) -> str | None:
         """获取文档URL"""
         return "/docs"
 
     @property
-    def redoc_url(self) -> Optional[str]:
+    def redoc_url(self) -> str | None:
         """获取ReDoc URL"""
         return "/redoc"
 

@@ -25,19 +25,10 @@ from .protocol import (
 
 def endpoint(path, *, websocket=False):
     if not settings.R2T2_URL:
-        raise StreamError(
-            "realtime_unavailable", "Realtime service is not configured", 503
-        )
+        raise StreamError("realtime_unavailable", "Realtime service is not configured", 503)
     parts = urlsplit(settings.R2T2_URL)
-    if (
-        parts.scheme not in ("http", "https")
-        or not parts.netloc
-        or parts.query
-        or parts.fragment
-    ):
-        raise StreamError(
-            "realtime_unavailable", "Invalid realtime service configuration", 503
-        )
+    if parts.scheme not in ("http", "https") or not parts.netloc or parts.query or parts.fragment:
+        raise StreamError("realtime_unavailable", "Invalid realtime service configuration", 503)
     scheme = {"http": "ws", "https": "wss"}[parts.scheme] if websocket else parts.scheme
     return urlunsplit((scheme, parts.netloc, parts.path.rstrip("/") + path, "", ""))
 
@@ -83,11 +74,7 @@ async def get_capabilities() -> dict[str, object]:
 
 
 def transcribe_segment(audio: np.ndarray, context: str = "") -> str:
-    if (
-        audio.ndim != 1
-        or not 0 < len(audio) <= OFFLINE_MAX_SAMPLES
-        or not np.isfinite(audio).all()
-    ):
+    if audio.ndim != 1 or not 0 < len(audio) <= OFFLINE_MAX_SAMPLES or not np.isfinite(audio).all():
         raise ValueError(
             f"Expected 1 sample to {OFFLINE_MAX_SECONDS} seconds of finite mono 16 kHz audio"
         )
@@ -120,9 +107,7 @@ def transcribe_segment(audio: np.ndarray, context: str = "") -> str:
             "upstream_error", "Shared R2T2 transcription request failed", error.code
         ) from error
     except Exception as error:
-        raise StreamError(
-            "upstream_error", "Shared R2T2 transcription failed", 502
-        ) from error
+        raise StreamError("upstream_error", "Shared R2T2 transcription failed", 502) from error
 
 
 @asynccontextmanager
@@ -153,9 +138,7 @@ async def open_stream(config):
             or ready.get("model") != MODEL_ID
             or ready.get("protocol_version") != PROTOCOL_VERSION
         ):
-            raise StreamError(
-                "realtime_unavailable", "Realtime backend protocol mismatch", 503
-            )
+            raise StreamError("realtime_unavailable", "Realtime backend protocol mismatch", 503)
     except StreamError:
         if connection:
             await connection.close()

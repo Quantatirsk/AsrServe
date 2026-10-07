@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Serialized offline R2T2 runtime."""
 
 from .router import (

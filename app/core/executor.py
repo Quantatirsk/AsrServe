@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """Run blocking inference while retaining resources until cancellation drains."""
 
-import os
 import asyncio
 import logging
+import os
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, TypeVar, Optional, ParamSpec
 from functools import partial
+from typing import ParamSpec, TypeVar
 
 from anyio import CancelScope
 
@@ -21,7 +21,7 @@ P = ParamSpec("P")
 _DEFAULT_WORKERS = max(4, os.cpu_count() or 4)
 _MAX_WORKERS = int(os.getenv("INFERENCE_THREAD_POOL_SIZE", str(_DEFAULT_WORKERS)))
 
-_executor: Optional[ThreadPoolExecutor] = None
+_executor: ThreadPoolExecutor | None = None
 
 
 def get_executor() -> ThreadPoolExecutor:
@@ -46,7 +46,7 @@ def shutdown_executor() -> None:
 
 async def wait_for_completion(future: asyncio.Future[T]) -> T:
     """Delay cancellation until owned work finishes, including repeated cancellation."""
-    cancellation: Optional[asyncio.CancelledError] = None
+    cancellation: asyncio.CancelledError | None = None
     # Starlette uses level cancellation; shielding avoids a busy cancellation loop.
     with CancelScope(shield=True):
         while not future.done():
