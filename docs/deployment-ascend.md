@@ -22,7 +22,7 @@ docker compose -f compose.ascend.yml up -d
 docker compose -f compose.ascend.yml logs -f asr
 ```
 
-Compose 只引用 `quantatrisk/asrserve:ascend`（Docker Hub 发布 linux/arm64，版本标签 `1.0.4-ascend`；x86 宿主机或修改代码后用 `TARGET=ascend ./build.sh` 本地构建），挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2、Nemotron 与 CT-Transformer 标点模型到 `./models`，不下载 Aligner。
+Compose 只引用 `quantatrisk/asrserve:ascend`（Docker Hub 发布 linux/arm64，版本标签 `1.0.5-ascend`；x86 宿主机或修改代码后用 `TARGET=ascend ./build.sh` 本地构建），挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2、Nemotron 与 CT-Transformer 标点模型到 `./models`，不下载 Aligner。
 
 文件转写支持 `prompt`、`hotwords` 并恢复整份文件的句读；CPU API 环境包含固定版本的 FunASR、ModelScope 和 libsoxr，NPU 推理环境不安装这些标点组件。OpenAI `/v1/realtime` 通过私有流式协议使用已有 NPU R2T2，提供与主分支相同的手动提交、多轮和热词提示；24→16 kHz 连续重采样在 API 进程完成。SDK 配置和事件见 [OpenAI Realtime 转写](openai-realtime.md)。
 

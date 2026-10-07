@@ -212,7 +212,7 @@ wheels = [
 
 [[package]]
 name = "asrserve"
-version = "1.0.4"
+version = "1.0.5"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-8-asrserve-cpu' and extra == 'extra-8-asrserve-cuda') or (sys_platform == 'darwin' and extra == 'extra-8-asrserve-cpu' and extra == 'extra-8-asrserve-cuda') or (sys_platform == 'linux' and extra == 'extra-8-asrserve-cpu' and extra == 'extra-8-asrserve-cuda')" },

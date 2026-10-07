@@ -14,8 +14,11 @@ docker compose logs -f asr
 
 | 镜像 | 架构 | 版本标签 |
 | --- | --- | --- |
-| `quantatrisk/asrserve:gpu` | linux/amd64 | `1.0.4-gpu` |
-| `quantatrisk/asrserve:cpu` | linux/amd64、linux/arm64 | `1.0.4-cpu` |
+| `quantatrisk/asrserve:gpu` | linux/amd64 | `1.0.5-gpu` |
+| `quantatrisk/asrserve:cpu` | linux/amd64、linux/arm64 | `1.0.5-cpu` |
+| `quantatrisk/asrserve:ascend` | linux/arm64（Ascend 910B） | `1.0.5-ascend` |
+
+Ascend 910B 使用 [`ascend-910b`](https://github.com/Quantatirsk/AsrServe/tree/ascend-910b) 分支的 Compose 文件及部署说明。
 
 本地没有镜像时自动从 Docker Hub 拉取，升级执行 `docker compose pull && docker compose up -d`。需要固定版本时把 compose 的 `image` 改为版本标签。从源码构建：`./build.sh` 生成 `:gpu`，`TARGET=cpu ./build.sh` 生成本机架构的 `:cpu`，同名标签会覆盖拉取的镜像。首次启动自动下载缺失模型，健康检查宽限 600 秒。
 
