@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 FastAPI应用创建和配置
+FastAPI application creation and configuration
 """
 
 import warnings
@@ -21,9 +22,11 @@ from .core.exceptions import (
 )
 from .core.logging import setup_logging
 from .core.executor import shutdown_executor
+from .core.i18n import t
 from .api.v1 import api_router
 
 # 忽略 Pydantic V2 兼容性警告
+# Ignore Pydantic V2 compatibility warnings
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2")
 warnings.filterwarnings("ignore", message=".*has conflict with protected namespace.*")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
@@ -32,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 def cleanup_temp_directory():
-    """清理临时目录中的旧文件"""
+    """清理临时目录中的旧文件
+    Clean up old files in the temp directory
+    """
     import time
 
     temp_dir = settings.TEMP_DIR
@@ -40,6 +45,7 @@ def cleanup_temp_directory():
         return
 
     # 清理超过 1 小时的临时文件
+    # Clean up temp files older than 1 hour
     max_age_seconds = 3600
     current_time = time.time()
     cleaned_count = 0
@@ -57,9 +63,9 @@ def cleanup_temp_directory():
                         pass
 
         if cleaned_count > 0:
-            logger.info(f"已清理 {cleaned_count} 个过期临时文件")
+            logger.info(t("app.temp_cleaned", count=cleaned_count))
     except Exception as e:
-        logger.warning(f"清理临时目录时出错: {e}")
+        logger.warning(t("app.temp_cleanup_error", error=e))
 
 
 @asynccontextmanager
@@ -88,9 +94,12 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    """创建FastAPI应用"""
+    """创建FastAPI应用
+    Create the FastAPI application
+    """
 
     # 设置日志
+    # Setup logging
     setup_logging()
 
     app = FastAPIOffline(
@@ -99,10 +108,11 @@ def create_app() -> FastAPI:
         version=settings.APP_VERSION,
         docs_url=settings.docs_url,
         redoc_url=settings.redoc_url,
-        lifespan=lifespan,  # 添加生命周期管理
+        lifespan=lifespan,  # 添加生命周期管理 / Add lifecycle management
     )
 
     # 添加CORS中间件
+    # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -112,13 +122,16 @@ def create_app() -> FastAPI:
     )
 
     # 注册异常处理器
+    # Register exception handlers
     app.add_exception_handler(APIException, api_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)
 
     # 注册API路由
+    # Register API routes
     app.include_router(api_router)
 
     # 根路径
+    # Root path
     @app.get("/", include_in_schema=False)
     async def root():
         return RedirectResponse("realtime")
@@ -127,4 +140,5 @@ def create_app() -> FastAPI:
 
 
 # 创建全局应用实例
+# Create global application instance
 app = create_app()

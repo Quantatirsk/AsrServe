@@ -24,6 +24,7 @@ from ..core.exceptions import (
     InvalidMessageException,
     DefaultServerErrorException,
 )
+from ..core.i18n import t
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +49,7 @@ def download_audio_from_url(url: str, max_size: Optional[int] = None) -> bytes:
         InvalidMessageException: 文件太大
     """
     if not url:
-        raise InvalidParameterException("URL不能为空")
+        raise InvalidParameterException(t("audio.url_empty"))
 
     max_file_size = max_size or settings.MAX_AUDIO_SIZE
 
@@ -60,7 +61,7 @@ def download_audio_from_url(url: str, max_size: Optional[int] = None) -> bytes:
         content_length = response.headers.get("content-length")
         if content_length and int(content_length) > max_file_size:
             max_size_mb = max_file_size // 1024 // 1024
-            raise InvalidMessageException(f"音频文件太大，最大支持{max_size_mb}MB")
+            raise InvalidMessageException(t("audio.file_too_large", max_size_mb=max_size_mb))
 
         # 分块下载并检查大小
         audio_data = BytesIO()
@@ -70,13 +71,13 @@ def download_audio_from_url(url: str, max_size: Optional[int] = None) -> bytes:
             downloaded_size += len(chunk)
             if downloaded_size > max_file_size:
                 max_size_mb = max_file_size // 1024 // 1024
-                raise InvalidMessageException(f"音频文件太大，最大支持{max_size_mb}MB")
+                raise InvalidMessageException(t("audio.file_too_large", max_size_mb=max_size_mb))
             audio_data.write(chunk)
 
         return audio_data.getvalue()
 
     except requests.RequestException as e:
-        raise InvalidParameterException(f"下载音频文件失败: {str(e)}")
+        raise InvalidParameterException(t("audio.download_failed", error=str(e)))
 
 
 def save_audio_to_temp_file(audio_data: bytes, suffix: str = ".wav") -> str:
@@ -99,7 +100,7 @@ def save_audio_to_temp_file(audio_data: bytes, suffix: str = ".wav") -> str:
             temp_file.write(audio_data)
             return temp_file.name
     except Exception as e:
-        raise DefaultServerErrorException(f"保存音频文件失败: {str(e)}")
+        raise DefaultServerErrorException(t("audio.save_failed", error=str(e)))
 
 
 def cleanup_temp_file(file_path: str) -> None:
@@ -134,7 +135,7 @@ def load_audio_file(audio_path: str, target_sr: int = 16000) -> Tuple[np.ndarray
         audio_data, sr = librosa.load(audio_path, sr=target_sr)
         return audio_data, int(sr)
     except Exception as e:
-        raise DefaultServerErrorException(f"加载音频文件失败: {str(e)}")
+        raise DefaultServerErrorException(t("audio.load_failed", error=str(e)))
 
 
 def get_audio_duration(audio_path: str) -> float:
@@ -155,7 +156,7 @@ def get_audio_duration(audio_path: str) -> float:
         duration = librosa.get_duration(y=y, sr=sr)
         return duration
     except Exception as e:
-        raise DefaultServerErrorException(f"获取音频时长失败: {str(e)}")
+        raise DefaultServerErrorException(t("audio.duration_failed", error=str(e)))
 
 
 def get_container_duration(audio_path: str) -> Optional[float]:
@@ -173,7 +174,7 @@ def get_container_duration(audio_path: str) -> Optional[float]:
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
     except Exception as e:
-        logger.debug(f"ffprobe 获取容器时长失败: {e}")
+        logger.debug(t("audio.ffprobe_failed", error=e))
     return None
 
 
@@ -347,7 +348,7 @@ def save_audio_array(
         return output_path
 
     except Exception as e:
-        raise DefaultServerErrorException(f"保存音频文件失败: {str(e)}")
+        raise DefaultServerErrorException(t("audio.save_failed", error=str(e)))
 
 
 def convert_audio_to_wav(

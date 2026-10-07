@@ -20,7 +20,7 @@ api_router.include_router(realtime_router)
 api_router.include_router(openai_router)
 
 
-@api_router.get("/health", summary="服务健康检查")
+@api_router.get("/health", summary="Service health check")
 async def health(request: Request):
     result, content = validate_token(request)
     if not result:
