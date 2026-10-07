@@ -121,6 +121,6 @@ asyncio.run(main())
 
 无效配置、Base64、事件或空提交返回标准 `error`，可在同一连接修正后继续。内核不可用、满载或推理失败会结束连接；已经建立的转写轮失败时发送 `conversation.item.input_audio_transcription.failed`。
 
-本接口不提供对话生成、TTS、WebRTC、服务端 VAD、降噪或 logprobs；`turn_detection` 必须为 `null`。它也不输出标准协议未定义的说话人标签或字词时间戳。需要实时主讲者标签时使用[原生 `/v1/stream`](realtime.md)，需要完整文件断句、说话人归属和字词时间戳时使用 [`/v1/audio/transcriptions`](../README.md#文件转写)。实时转写仍按内核的流式结果输出，离线全文标点恢复不会用于已发布的实时增量。
+本接口不提供对话生成、TTS、WebRTC、服务端 VAD、降噪或 logprobs；`turn_detection` 必须为 `null`。它也不输出标准协议未定义的说话人标签或字词时间戳。需要实时主讲者标签时使用[原生 `/v1/stream`](realtime.md)，需要完整文件断句、说话人归属和字词时间戳时使用 [`/v1/audio/transcriptions`](../README.md#file-transcription)。实时转写仍按内核的流式结果输出，离线全文标点恢复不会用于已发布的实时增量。
 
 协议依据：[OpenAI Realtime transcription](https://developers.openai.com/api/docs/guides/realtime-transcription)、[Realtime client events](https://developers.openai.com/api/reference/resources/realtime/client-events)。

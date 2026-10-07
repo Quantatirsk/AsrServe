@@ -16,7 +16,10 @@ from pathlib import Path
 
 logger = logging.getLogger("single-container")
 ENGINE_URL = "http://127.0.0.1:8001/health"
-API_URL = "http://127.0.0.1:8000/health"
+
+
+def api_url() -> str:
+    return f"http://127.0.0.1:{int(os.environ.get('PORT', '8000'))}/health"
 
 
 @dataclass
@@ -31,7 +34,7 @@ class Service:
 def healthy(url: str, ready_key: str) -> bool:
     try:
         headers = {}
-        if url == API_URL and os.environ.get("API_KEY"):
+        if url == api_url() and os.environ.get("API_KEY"):
             headers["Authorization"] = "Bearer " + os.environ["API_KEY"].strip()
         request = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(request, timeout=3) as response:
@@ -98,7 +101,7 @@ def run(
                     raise TimeoutError(f"{service.name} startup timed out")
                 stop.wait(0.5)
         if not stop.is_set():
-            logger.info("Single-container ASR ready on port 8000")
+            logger.info("ASR ready: %s", api_url())
         while not stop.wait(0.5):
             check_children(children)
         return 0
@@ -169,13 +172,13 @@ def services() -> list[Service]:
                 "--host",
                 "0.0.0.0",
                 "--port",
-                "8000",
+                os.environ.get("PORT", "8000"),
                 "--ws-max-size",
                 str(MAX_EVENT_BYTES),
                 "--ws-max-queue",
                 "8",
             ],
-            API_URL,
+            api_url(),
             "model_loaded",
             api_env,
         ),
@@ -197,7 +200,7 @@ def main() -> int:
     if args.healthcheck:
         return (
             0
-            if healthy(ENGINE_URL, "ready") and healthy(API_URL, "model_loaded")
+            if healthy(ENGINE_URL, "ready") and healthy(api_url(), "model_loaded")
             else 1
         )
     logging.basicConfig(
@@ -217,8 +220,9 @@ def main() -> int:
         return 1
     os.environ["DEVICE"] = device
     logger.info(
-        "Inference device: %s; shared offline/streaming R2T2 and independent aligner",
+        "Inference device: %s; shared R2T2; alignment_mode=%s",
         device,
+        settings.ALIGNMENT_MODE,
     )
     if not ensure_models_downloaded():
         return 1

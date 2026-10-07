@@ -26,7 +26,7 @@ class ModelAsset:
 
 def get_huggingface_assets() -> list[ModelAsset]:
     """Return the diarizer, shared ASR checkpoint, and timestamp aligner."""
-    return [
+    assets = [
         ModelAsset(
             model_id="nvidia/Nemotron-3-Diarization",
             revision="f667ed73aee57d40cc39428eb768b4fd87a0a29e",
@@ -63,6 +63,7 @@ def get_huggingface_assets() -> list[ModelAsset]:
         ),
     ]
 
+    return assets if settings.ALIGNMENT_MODE == "forced" else assets[:-1]
 
 def get_model_assets() -> list[ModelAsset]:
     return [

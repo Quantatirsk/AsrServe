@@ -32,3 +32,4 @@ class ASRFullResult:
     segments: list[ASRSegmentResult]
     duration: float
     speaker_segments: list[SpeakerSegment] | None = None
+    word_timestamp_method: str | None = None

@@ -1,23 +1,92 @@
-# AsrServe
+<div align="center">
 
-自部署的实时与离线语音识别服务。本项目始终采用 SOTA 开源模型和最高效的推理方案，识别质量是第一优先级；当前组合为 Confucius4-R2T2 识别、CT-Transformer 离线标点恢复、Nemotron 说话人分离、Qwen3-ForcedAligner 字词时间戳。
+<h1>AsrServe</h1>
+<h3>Ready-to-use Local Speech Recognition API Service</h3>
 
-- 支持 NVIDIA GPU、Linux CPU（amd64/arm64），并原生适配 macOS Apple Silicon：内置 Rust 推理后端，无需 Docker 或 GPU 即可本机运行完整链路。
-- 实时与离线共用一份 R2T2 权重；离线独立识别原始录音。
-- 提供 OpenAI 兼容转写接口和浏览器录音页面。
+Self-hosted realtime and offline speech recognition. AsrServe always ships state-of-the-art open models on the most efficient inference path available, and treats recognition quality as a first-class citizen.
 
-## Docker 启动
+---
+
+![Static Badge](https://img.shields.io/badge/Python-3.11--3.12-blue?logo=python)
+![Static Badge](https://img.shields.io/badge/CUDA-13.0-%2376B900?logo=nvidia&logoColor=white)
+![Static Badge](https://img.shields.io/badge/vLLM-0.30-%23EE4C2C)
+![Static Badge](https://img.shields.io/badge/macOS-Apple_Silicon-black?logo=apple)
+
+</div>
+
+## Live Demo Site
+
+- **Web Demo**: https://asr.ieeio.com
+
+## Demo
+
+https://github.com/user-attachments/assets/ca6ed8ca-033d-4c58-85bb-2016d66151ea
+
+[Watch or download the original video](https://media.cdn.ieeio.com/qwenasr_client_demo.mp4)
+
+## Contact Author
+
+- **Email**: [pengzhia@gmail.com](mailto:pengzhia@gmail.com)
+- **WeChat**:
+
+<img src="./demo/contact.jpg" alt="WeChat QR code" width="220">
+
+## Release 1.0.4
+
+`v1.0.4` replaces the whole model stack on both the backend and the browser client. In our own tests against `v1.0.3`, recognition accuracy improved by about **20%** and end-to-end efficiency by about **40%**.
+
+Breaking changes:
+
+- **Project rename**: `qwen3-asr` is now **AsrServe**. The GitHub repository, Python package and Docker images (`quantatrisk/asrserve`) use the new name; old GitHub URLs redirect automatically.
+- **ASR model**: Qwen3-ASR 1.7B/0.6B is replaced by [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2). Offline and realtime share one R2T2 engine (vLLM on CUDA, vendored Rust on CPU); the `model` request field no longer switches models.
+- **Speaker diarization**: CAM++ is replaced by [Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization) (up to 8 speakers). Realtime streams now also carry per-utterance speaker labels.
+- **Removed models**: FSMN VAD, the three CAM++ models and the Qwen3-ASR checkpoints are gone. Nemotron speech activity drives offline segmentation.
+- **Removed API**: the Alibaba Cloud compatible REST API (`/stream/v1/asr*`) is removed. Use the OpenAI-compatible `/v1/audio/transcriptions` and the native `/v1/stream` WebSocket.
+- **Deployment**: images are published on Docker Hub as `quantatrisk/asrserve:gpu` (amd64), `:cpu` (amd64/arm64) and `:ascend` (arm64, Ascend 910B branch), plus `1.0.4-*` version tags; `build.sh` builds from source. Compose files are `compose.yml` (GPU) and `compose.cpu.yml` (CPU) and no longer build. The only mount is `./models`. `docker-compose*.yml`, `deploy/prepare.sh` and the model export option are removed. The old `quantatrisk/qwen3-asr` Docker Hub repository is no longer updated.
+- **Runtime**: the CUDA image moves to CUDA 13.0 and vLLM 0.30; the service listens on port `17003`.
+
+Older release notes: [GitHub Releases](https://github.com/Quantatirsk/AsrServe/releases).
+
+## Features
+
+- **SOTA models, quality first**: Confucius4-R2T2 recognition, CT-Transformer offline punctuation, Nemotron speaker diarization and Qwen3-ForcedAligner word timestamps today; the stack moves whenever a better open model appears
+- **First-class macOS support**: runs natively on Apple Silicon through a bundled Rust inference backend, no Docker or GPU required
+- **Runs anywhere else too**: NVIDIA GPU (vLLM) and Linux CPU (amd64/arm64)
+- **Realtime and offline** in one service, sharing one set of R2T2 weights
+- **Speaker diarization** for files and live streams via Nemotron
+- **Word timestamps** via Qwen3-ForcedAligner
+- **OpenAI compatible** `/v1/audio/transcriptions`, works with the OpenAI SDK
+- **OpenAI Realtime transcription** `/v1/realtime`, with incremental text, manual commit and multiple turns per connection
+- **Browser recording page** at `/realtime`
+
+## Quick Start
 
 ```bash
-docker compose up -d                        # GPU：quantatrisk/asrserve:gpu
-docker compose -f compose.cpu.yml up -d     # CPU：quantatrisk/asrserve:cpu（amd64/arm64）
+docker compose up -d                        # GPU: quantatrisk/asrserve:gpu
+docker compose -f compose.cpu.yml up -d     # CPU: quantatrisk/asrserve:cpu (amd64/arm64)
 ```
 
-镜像已发布到 Docker Hub，首次启动自动拉取；升级执行 `docker compose pull && docker compose up -d`。从源码构建用 `./build.sh`（CPU：`TARGET=cpu ./build.sh`）。首次启动自动下载固定版本模型到 `./models`，这是唯一的挂载目录；离线部署见[部署说明](docs/deployment.md)。
+Images are pulled from Docker Hub on first start; upgrade with `docker compose pull && docker compose up -d`. To build from source, run `./build.sh` (CPU: `TARGET=cpu ./build.sh`). Ascend 910B lives on the [`ascend-910b`](https://github.com/Quantatirsk/AsrServe/tree/ascend-910b) branch.
 
-默认地址为 `http://localhost:17003`：录音页面 `/realtime`，API 文档 `/docs`，健康检查 `/health`。`.env` 可选；需要鉴权、离线模式或调整显存/线程时，复制 `.env.example` 并取消相应注释。
+On macOS, run natively instead (see [Deployment](docs/deployment.md#原生-cpu)):
 
-## 文件转写
+```bash
+uv sync --frozen && ./scripts/build-rust.sh
+HF_HOME="$PWD/models/huggingface" uv run --no-sync python start.py   # http://localhost:8000
+```
+
+The first start downloads the pinned models into `./models`. Default URL: `http://localhost:17003` (recording page `/realtime`, API docs `/docs`, health `/health`).
+
+`.env` is optional; copy `.env.example` and uncomment what you need (API key, offline mode, GPU memory, CPU threads).
+
+For offline hosts, pre-download on a networked machine, copy the repository including `models/`, and set `HF_HUB_OFFLINE=1`:
+
+```bash
+./scripts/prepare-models.sh                                   # uses the :gpu image, no GPU needed
+IMAGE=quantatrisk/asrserve:cpu ./scripts/prepare-models.sh   # or the :cpu image
+```
+
+## File Transcription
 
 ```bash
 curl http://localhost:17003/v1/audio/transcriptions \
@@ -29,36 +98,28 @@ curl http://localhost:17003/v1/audio/transcriptions \
   -F word_timestamps=true
 ```
 
-离线始终用 Nemotron 的活动区间切段。`enable_speaker_diarization=false` 仅关闭文字说话人归属和说话人信息；只有请求字词时间戳时才做对齐。成功检测但活动为空时保留整段音频、按最大长度切分交给 ASR，避免将漏检当成静音；Nemotron 推理失败则报错。实时低能量收尾检测保持独立。
+With `API_KEY` set, add `Authorization: Bearer <API_KEY>`. Speaker paragraphs follow the main speaker; raw overlapping activity is returned in `speaker_segments`.
 
-配置 `API_KEY` 后添加 `Authorization: Bearer <API_KEY>`。`model` 参数不切换模型，服务始终使用 R2T2。说话人段落表示主讲者，重叠活动另存于 `speaker_segments`；分离说话人不等于分离干净音轨。
+`hotwords` supplies names and terminology; `prompt` supplies recording context. Both work for uploads and `audio_address`. Values are trimmed and combined in `prompt`, `hotwords` order with a newline, up to 2048 characters; longer requests return HTTP 400. Every ASR chunk receives the context as recognition guidance, without forced replacements or keyword weights.
 
-`hotwords` 可填写人名、产品名等词语，以逗号或换行分隔；OpenAI 兼容参数 `prompt` 可提供录音主题和术语上下文。两者都可用于文件上传和 `audio_address` URL 转写；同时提供时，去除两端空白后按 `prompt`、`hotwords` 顺序用换行连接，总计最多 2048 个字符，超限返回 HTTP 400。提示传入每个计算块的 R2T2 识别过程，属于模型的识别引导；热词权重和强制替换功能暂未提供。
+File transcription restores punctuation using whole-file text context before alignment and speaker assignment. CT-Transformer runs on CPU through FunASR, preserving the original text, case, spaces, numbers and existing sentence endings. Its pinned ModelScope checkpoint is downloaded into `models/`; details are in [Deployment](docs/deployment.md).
 
-文件转写默认恢复全文句读：CT-Transformer 在 CPU 上结合整份文件的转写上下文补逗号、句号和问号，再进行时间对齐及说话人归属。标点标签写回原始文字，保留大小写、空格、数字和已有句末标点；断句是模型预测，仍需按实际录音检查。
+## Realtime Transcription
 
-离线计算块与展示段落独立：保留已验证的 Nemotron 自然语音切块及 60 秒计算上限，不为减少请求数跨较长停顿拼接音频；实测这种拼接会使 R2T2 提前结束或漏识别。空活动仍保留完整音频兜底。整份录音只建立一次说话人活动索引，复用识别后的字词时间戳完成归属。连续同一说话人的内容跨计算块合并，**没有 30 秒段落限制**；短插话合计不足 2 秒（按字词时长、不计停顿）、随后回到同一主讲者且交接间隔最多 1 秒时归入主讲者。
+Connect to `ws://localhost:17003/v1/stream` and send 16 kHz mono int16 PCM. See the [realtime protocol](docs/realtime.md).
 
-开启说话人分离时不输出 Unknown：明确换人时切换标签，模糊重叠或无活动时优先沿用当前说话人；开头按覆盖最多或最近的活动归属，整份录音无活动但识别出文字时使用默认“说话人1”。这些是展示归属估计，不表示模型确信；原始活动仍保存在 `speaker_segments`，无活动时仍为空。文字内容和字词绝对时间保持不变，`word_timestamps` 只控制词时间戳是否公开，不改变分组。
+For OpenAI clients, connect to `/v1/realtime?intent=transcription` and send Base64 PCM16 at 24 kHz. Text streams as audio arrives; the client commits each turn. Prompts and keywords guide recognition. See [OpenAI Realtime transcription](docs/openai-realtime.md) for SDK examples, authentication and supported features.
 
-实时接口 `/v1/stream` 使用 16 kHz 单声道 PCM，协议见[实时转写](docs/realtime.md)。
+## Documentation
 
-OpenAI Realtime 转写兼容接口 `/v1/realtime` 支持 Base64 编码的 24 kHz PCM16，音频到达时发送增量文字，由客户端 `commit` 结束一轮转写。同一连接可多轮转写，`prompt` 和 `keywords` 用于识别引导；SDK 示例、鉴权与支持范围见 [OpenAI Realtime 转写](docs/openai-realtime.md)。
+- [Deployment](docs/deployment.md): configuration, offline setup, native CPU, limits
+- [Realtime protocol](docs/realtime.md)
+- [OpenAI Realtime transcription](docs/openai-realtime.md)
+- [Acceptance scripts](scripts/benchmark/README.md)
 
-## 本地开发
+## Acknowledgements
 
-需要 Python 3.11–3.12、uv 和 FFmpeg；CPU 后端还需要 Rust。
-
-```bash
-uv sync --frozen --extra cuda  # Linux CPU 改为 --extra cpu；macOS 去掉 --extra cuda
-uv run --no-sync python start.py
-uv run --no-sync python -m pytest tests
-```
-
-CPU 原生构建、模型缓存和平台限制见[部署说明](docs/deployment.md)；验收脚本见 [scripts/benchmark](scripts/benchmark/README.md)。
-
-## 上游
-
-- [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2)：语音识别；源码归属见 `deploy/R2T2-NOTICE`，权重遵循独立 MODEL_LICENSE。
-- [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR)：强制对齐。
-- [Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization)：说话人分离。
+- [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2): speech recognition; source attribution in `deploy/R2T2-NOTICE`, weights under their own MODEL_LICENSE
+- [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR): forced alignment
+- [Nemotron-3-Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization): speaker diarization
+- [QwenASR](https://github.com/huanglizhuo/QwenASR): vendored CPU Rust backend
