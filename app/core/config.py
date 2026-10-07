@@ -19,7 +19,7 @@ class Settings:
 
     # 应用信息
     APP_NAME: str = "AsrServe"
-    APP_VERSION: str = "1.0.3"
+    APP_VERSION: str = "1.0.5"
     APP_DESCRIPTION: str = "R2T2 offline and realtime speech recognition"
 
     # 服务器配置

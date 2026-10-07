@@ -31,6 +31,17 @@ https://github.com/user-attachments/assets/ca6ed8ca-033d-4c58-85bb-2016d66151ea
 
 <img src="./demo/contact.jpg" alt="WeChat QR code" width="220">
 
+## Release 1.0.5
+
+`v1.0.5` restores punctuation throughout file transcriptions, exposes recording context and hotwords, and adds OpenAI Realtime transcription.
+
+- **File punctuation**: CT-Transformer restores sentence boundaries using whole-file text context before alignment and speaker assignment. It runs on CPU and preserves the original words, case, spaces and numbers. The pinned punctuation checkpoint is downloaded on first startup if it is not already cached.
+- **File hotwords**: `/v1/audio/transcriptions` accepts `hotwords` and uses `prompt` for recording context, for both uploads and `audio_address`. Their combined limit is 2048 characters; they guide recognition without forcing replacements.
+- **OpenAI Realtime**: `/v1/realtime?intent=transcription` streams text as audio arrives, supports manual `commit`, `clear` and multiple turns, and uses the existing API key authentication. See the [protocol and SDK examples](docs/openai-realtime.md) for the supported transcription flow.
+- **Audio and alignment**: FFmpeg normalizes input audio. Optional uniform word timing avoids loading ForcedAligner; responses identify these timestamps as estimates.
+- **Native macOS service**: Apple Silicon can run the service through a user LaunchAgent, with install, update, restart and uninstall commands.
+- **Images**: `quantatrisk/asrserve:1.0.5-gpu` (amd64), `:1.0.5-cpu` (amd64/arm64) and `:1.0.5-ascend` (arm64, Ascend 910B branch).
+
 ## Release 1.0.4
 
 `v1.0.4` replaces the whole model stack on both the backend and the browser client. In our own tests against `v1.0.3`, recognition accuracy improved by about **20%** and end-to-end efficiency by about **40%**.
