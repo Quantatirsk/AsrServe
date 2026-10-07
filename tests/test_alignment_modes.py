@@ -66,6 +66,10 @@ def test_uniform_pipeline_switches_and_serialization(labels: bool, words: bool) 
                 return_value="\u4f60\u597d\uff0cworld!",
             ),
             patch(
+                "app.services.asr.r2t2_engine.restore_punctuation",
+                side_effect=lambda texts: list(texts),
+            ),
+            patch(
                 "app.services.asr.r2t2_engine.uniform_word_timestamps",
                 wraps=uniform_word_timestamps,
             ) as align,

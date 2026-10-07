@@ -115,6 +115,8 @@ def run(
 
 
 def services() -> list[Service]:
+    from app.services.realtime.openai_protocol import MAX_EVENT_BYTES
+
     engine_env = dict(os.environ)
     engine_env.pop("PYTHONHOME", None)
     engine_env.update(
@@ -172,7 +174,7 @@ def services() -> list[Service]:
                 "--port",
                 os.environ.get("PORT", "8000"),
                 "--ws-max-size",
-                "65536",
+                str(MAX_EVENT_BYTES),
                 "--ws-max-queue",
                 "8",
             ],

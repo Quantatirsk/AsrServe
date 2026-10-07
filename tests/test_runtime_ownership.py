@@ -24,6 +24,12 @@ from app.utils.speaker_diarizer import DiarizationResult
 
 class RuntimeOwnershipTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
+        punctuation = patch(
+            "app.services.asr.r2t2_engine.restore_punctuation",
+            side_effect=lambda texts: list(texts),
+        )
+        punctuation.start()
+        self.addCleanup(punctuation.stop)
         manager = SimpleNamespace(create_engine=lambda _: object())
         patcher = patch(
             "app.services.asr.runtime.router.get_model_manager", return_value=manager

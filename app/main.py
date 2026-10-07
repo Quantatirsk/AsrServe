@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     if integrity["invalid_models"]:
         raise RuntimeError("Required model integrity check failed")
     preload_models()
-    logger.info("R2T2 and Nemotron ready; alignment_mode=%s", settings.ALIGNMENT_MODE)
+    logger.info("R2T2, Nemotron and punctuation ready; alignment_mode=%s", settings.ALIGNMENT_MODE)
     try:
         yield
     finally:
@@ -82,6 +82,9 @@ async def lifespan(app: FastAPI):
         from .utils.speaker_diarizer import close_speaker_diarizer
 
         close_speaker_diarizer()
+        from .services.asr.punctuation import close_punctuation_model
+
+        close_punctuation_model()
 
 
 def create_app() -> FastAPI:

@@ -4,6 +4,7 @@
 在应用启动时预加载所有需要的模型,避免首次请求时的延迟
 """
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ class ModelIntegritySpec:
     alternative_required_patterns: tuple[tuple[str, ...], ...] = ()
     min_total_size_bytes: int = 0
     expected_revision: str | None = None
+    file_hashes: tuple[tuple[str, str], ...] = ()
 
 
 def _find_pattern_matches(root: Path, pattern: str) -> list[Path]:
@@ -90,6 +92,14 @@ def _check_model_integrity_spec(spec: ModelIntegritySpec) -> dict[str, Any]:
                     f"{name}: expected revision {spec.expected_revision}"
                 )
 
+    for name, expected_hash in spec.file_hashes:
+        path = spec.path / name
+        if path.is_file():
+            with path.open("rb") as file:
+                actual = hashlib.file_digest(file, "sha256").hexdigest()
+            if actual != expected_hash:
+                missing_patterns.append(f"{name}: SHA-256 mismatch")
+
     if missing_patterns:
         return {
             "description": spec.description,
@@ -126,11 +136,11 @@ def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
         find_huggingface_snapshot_dir,
     )
     from app.services.asr.model_capabilities import (
-        get_huggingface_assets,
+        get_model_assets,
     )
 
     specs = []
-    for asset in get_huggingface_assets():
+    for asset in get_model_assets():
         cache = get_huggingface_model_cache_dir(asset.model_id)
         snapshot = (
             Path(asset.local_dir)
@@ -148,7 +158,10 @@ def _build_required_model_integrity_specs() -> list[ModelIntegritySpec]:
                 required_patterns=asset.required_patterns,
                 alternative_required_patterns=asset.alternative_required_patterns,
                 min_total_size_bytes=asset.min_total_size_bytes,
-                expected_revision=asset.revision if asset.local_dir else None,
+                expected_revision=asset.revision
+                if asset.local_dir and asset.hub == "huggingface"
+                else None,
+                file_hashes=asset.file_hashes,
             )
         )
     return specs
@@ -175,12 +188,15 @@ def preload_models() -> dict[str, Any]:
     from app.services.realtime.protocol import MODEL_ID
     from app.services.realtime.client import get_engine_capabilities
     from app.utils.speaker_diarizer import get_speaker_diarizer
+    from app.services.asr.punctuation import get_punctuation_model
 
     if not get_engine_capabilities().get("ready"):
         raise RuntimeError("Shared R2T2 engine is not ready")
     get_runtime_router().warmup_model(MODEL_ID)
     get_speaker_diarizer().warmup()
+    get_punctuation_model()
     return {
         "asr_models": {MODEL_ID: {"loaded": True}},
         "speaker_diarization_model": {"loaded": True},
+        "punctuation_model": {"loaded": True},
     }

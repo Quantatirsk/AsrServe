@@ -13,7 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.services.asr.engines import ASRFullResult, ASRSegmentResult, WordToken
-from app.services.realtime.protocol import MODEL_ID, StreamError
+from app.services.realtime.protocol import MAX_CONTEXT_CHARACTERS, MODEL_ID, StreamError
 from deploy import entrypoint as launcher
 from app.utils.speaker_diarizer import SpeakerSegment
 
@@ -183,6 +183,83 @@ class APIContractTest(unittest.TestCase):
         options = self.service.start_transcription.call_args.kwargs
         self.assertIsNone(options["audio_data"])
         self.assertEqual(options["audio_address"], "https://example.test/audio.wav")
+
+    def test_upload_and_url_context_reaches_transcription_options(self) -> None:
+        cases = (
+            ({}, ""),
+            (
+                {"hotwords": "  光谷水投,武汉新城\nAda & Alan  "},
+                "光谷水投,武汉新城\nAda & Alan",
+            ),
+            ({"prompt": "  水务项目会议  "}, "水务项目会议"),
+            (
+                {"prompt": "水务项目会议", "hotwords": "光谷水投,武汉新城"},
+                "水务项目会议\n光谷水投,武汉新城",
+            ),
+            ({"prompt": " \t", "hotwords": " "}, ""),
+            (
+                {"hotwords": "词" * MAX_CONTEXT_CHARACTERS},
+                "词" * MAX_CONTEXT_CHARACTERS,
+            ),
+            (
+                {"prompt": "话" * 1024, "hotwords": "词" * 1023},
+                "话" * 1024 + "\n" + "词" * 1023,
+            ),
+        )
+        with patch(
+            "app.api.v1.openai_compatible.get_offline_transcription_service",
+            return_value=self.service,
+        ):
+            for upload in (True, False):
+                for fields, expected in cases:
+                    with self.subTest(upload=upload, fields=tuple(fields)):
+                        source = (
+                            {"files": {"file": ("test.wav", b"audio")}}
+                            if upload
+                            else {}
+                        )
+                        data = {"response_format": "json", **fields}
+                        if not upload:
+                            data["audio_address"] = "https://example.test/audio.wav"
+                        response = self.client.post(
+                            "/v1/audio/transcriptions", data=data, **source
+                        )
+                        self.assertEqual(response.status_code, 200, response.text)
+                        options = self.service.start_transcription.call_args.kwargs[
+                            "options"
+                        ]
+                        self.assertEqual(options.hotwords, expected)
+
+    def test_oversized_context_fails_before_starting_transcription(self) -> None:
+        with patch(
+            "app.api.v1.openai_compatible.get_offline_transcription_service",
+            return_value=self.service,
+        ) as get_service:
+            for fields in (
+                {"hotwords": "词" * (MAX_CONTEXT_CHARACTERS + 1)},
+                {"prompt": "x" * (MAX_CONTEXT_CHARACTERS + 1)},
+                {"prompt": "话" * 1024, "hotwords": "词" * 1024},
+            ):
+                with self.subTest(fields=tuple(fields)):
+                    response = self.client.post(
+                        "/v1/audio/transcriptions",
+                        files={"file": ("test.wav", b"audio")},
+                        data=fields,
+                    )
+                    self.assertEqual(response.status_code, 400, response.text)
+                    self.assertEqual(response.json()["error_code"], "INVALID_PARAMETER")
+            get_service.assert_not_called()
+            self.service.start_transcription.assert_not_awaited()
+
+    def test_api_schema_exposes_supported_hotwords_and_prompt(self) -> None:
+        schema = self.app.openapi()
+        body = schema["paths"]["/v1/audio/transcriptions"]["post"]["requestBody"]
+        reference = body["content"]["multipart/form-data"]["schema"]["$ref"]
+        fields = schema["components"]["schemas"][reference.rsplit("/", 1)[1]][
+            "properties"
+        ]
+        self.assertIn("hotwords", fields)
+        self.assertNotIn("暂不支持", fields["prompt"]["description"])
 
     def test_any_model_value_uses_configured_transcription_service(self) -> None:
         names = (

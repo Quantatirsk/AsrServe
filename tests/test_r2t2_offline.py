@@ -112,6 +112,45 @@ class SharedOfflineClientTest(unittest.TestCase):
 
 
 class R2T2OfflineTest(unittest.TestCase):
+    def setUp(self) -> None:
+        punctuation = patch(
+            "app.services.asr.r2t2_engine.restore_punctuation",
+            side_effect=lambda texts: list(texts),
+        )
+        self.punctuation = punctuation.start()
+        self.addCleanup(punctuation.stop)
+
+    def test_full_punctuation_reaches_alignment_and_all_result_texts(self) -> None:
+        audio = np.zeros(16000, dtype=np.float32)
+        engine = R2T2Engine.__new__(R2T2Engine)
+        engine.aligner = Mock()
+        engine.aligner.align_transcript.return_value = []
+        self.punctuation.side_effect = None
+        self.punctuation.return_value = ["甲。乙。"]
+        with (
+            tempfile.NamedTemporaryFile() as source,
+            patch(
+                "app.services.asr.r2t2_engine.transcribe_segment", return_value="甲乙"
+            ),
+        ):
+            results = engine.transcribe_segments(
+                [
+                    SimpleNamespace(
+                        temp_file=source.name,
+                        audio_data=audio,
+                        start_sec=10,
+                        end_sec=11,
+                    )
+                ],
+                word_timestamps=True,
+            )
+        self.punctuation.assert_called_once_with(["甲乙"])
+        engine.aligner.align_transcript.assert_called_once_with(
+            audio_path=source.name, text="甲。乙。", audio=audio
+        )
+        self.assertEqual(results[0].text, "甲。乙。")
+        self.assertEqual((results[0].start_time, results[0].end_time), (10, 11))
+
     def test_native_number_style_reaches_alignment_without_rewriting(self) -> None:
         raw = (
             "\u4e09\u4e2a\u65b9\u9762\uff0c\u8fd9\u4e00\u5757\u6709\u4e00\u70b9\u9ad8"
@@ -168,9 +207,9 @@ class R2T2OfflineTest(unittest.TestCase):
             patch(
                 "app.services.asr.r2t2_engine.transcribe_segment",
                 # Concurrent calls may arrive in any order; results keep segment order.
-                side_effect=lambda samples, _: "second."
-                if samples is second
-                else "fresh!",
+                side_effect=lambda samples, _: (
+                    "second." if samples is second else "fresh!"
+                ),
             ) as recognize,
         ):
             paths = [
@@ -205,6 +244,12 @@ class R2T2OfflineTest(unittest.TestCase):
             self.assertEqual(recognize.call_count, 2)
             load_audio.assert_called_once_with(paths[1])
             recognize.assert_any_call(audio, "Ada")
+            self.assertTrue(
+                any(call.args[0] is second for call in recognize.call_args_list)
+            )
+            self.assertTrue(
+                all(call.args[1] == "Ada" for call in recognize.call_args_list)
+            )
             engine.aligner.align_transcript.assert_any_call(
                 audio_path=paths[0], text="fresh!", audio=audio
             )

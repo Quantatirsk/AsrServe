@@ -1,4 +1,6 @@
 import io
+import base64
+import json
 import os
 import subprocess
 import sys
@@ -11,6 +13,19 @@ from deploy import entrypoint as launcher
 
 
 class SingleContainerTest(unittest.TestCase):
+    def test_public_websocket_accepts_the_documented_base64_append_size(self):
+        from app.services.realtime.openai_protocol import MAX_APPEND_BYTES
+
+        _, api = launcher.services()
+        limit = int(api.command[api.command.index("--ws-max-size") + 1])
+        message = json.dumps(
+            {
+                "type": "input_audio_buffer.append",
+                "audio": base64.b64encode(b"\0" * MAX_APPEND_BYTES).decode("ascii"),
+            }
+        )
+        self.assertLessEqual(len(message.encode("utf-8")), limit)
+
     def service(self, name, code="import time; time.sleep(60)"):
         return launcher.Service(
             name,

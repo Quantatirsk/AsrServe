@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -7,6 +8,21 @@ from app.utils.model_loader import ModelIntegritySpec, _check_model_integrity_sp
 
 
 class ModelIntegritySpecTest(unittest.TestCase):
+    def test_pinned_model_checks_contents_not_only_file_size(self) -> None:
+        content = b"expected punctuation weights"
+        digest = hashlib.sha256(content).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            spec = ModelIntegritySpec(
+                "Punctuation", root, ("model.pt",), file_hashes=(("model.pt", digest),)
+            )
+            (root / "model.pt").write_bytes(content)
+            self.assertTrue(_check_model_integrity_spec(spec)["ok"])
+            (root / "model.pt").write_bytes(b"corrupt" + content[7:])
+            result = _check_model_integrity_spec(spec)
+            self.assertFalse(result["ok"])
+            self.assertIn("model.pt: SHA-256 mismatch", result["missing_patterns"])
+
     def test_local_revision_requires_matching_metadata_for_every_required_file(
         self,
     ) -> None:
