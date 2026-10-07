@@ -346,7 +346,7 @@ class APIContractTest(unittest.TestCase):
             patch("app.api.v1.detect_device", return_value="cuda:0"),
             patch.object(launcher.urllib.request, "urlopen", side_effect=fetch),
         ):
-            self.assertTrue(launcher.healthy(launcher.API_URL, "model_loaded"))
+            self.assertTrue(launcher.healthy(launcher.api_url(), "model_loaded"))
 
     def test_realtime_auth_and_unavailable_engine(self):
         with patch.object(settings, "API_KEY", "secret-token-123"):

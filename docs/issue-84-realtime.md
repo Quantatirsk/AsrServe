@@ -31,4 +31,6 @@
 - 中文收到 13 个非空增量，首个增量约 1.85 秒；英文收到 36 个非空增量，首个增量约 1.50 秒。两轮均在 `commit` 前收到文字，最终文本等于所有增量拼接，上一轮 item 关联正确。这是当前环境中的链路验证，不是延迟保证或准确率评测。
 - 验证使用临时开发 API，不替换当前运行的服务镜像；OpenAI SDK 只用于验证，没有请求 OpenAI 云端。
 
+合并最新主分支后，完整测试通过 201 项测试和 89 项子测试。容器入口的 WebSocket 消息大小上限同步到接口的 Base64 事件上限，避免允许的音频在到达接口前被拒绝；健康检查测试同步到上游新增的可配置端口函数。
+
 协议参考：[官方 Realtime transcription](https://developers.openai.com/api/docs/guides/realtime-transcription)。Wyoming 客户端参考：[wyoming_openai](https://github.com/roryeckel/wyoming_openai)。
