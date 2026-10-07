@@ -111,7 +111,7 @@ def translate(key: str, **kwargs: Any) -> str:
             try:
                 return current.format(**kwargs)
             except (KeyError, IndexError, ValueError) as e:
-                logger.warning(t("i18n.format_failed", key=key, error=e))
+                logger.warning("i18n.format_failed: key=%s error=%s", key, e)
                 return current
         return current
 
