@@ -95,6 +95,7 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.inference_release.set()
         self.inference_error = False
         self.file_survived_inference = False
+        self.received_hotwords: list[str] = []
         self.loop = asyncio.get_event_loop()
 
         def normalize(path: str, sample_rate: int) -> NormalizedAudio:
@@ -114,6 +115,7 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
         def infer(
             *, audio_path: str, timestamp_scale: float, **kwargs: object
         ) -> ASRFullResult:
+            self.received_hotwords.append(str(kwargs["hotwords"]))
             self.loop.call_soon_threadsafe(self.inference_started.set)
             if not self.inference_release.wait(3):
                 raise TimeoutError("Inference was not released")
@@ -380,6 +382,33 @@ class OfflineLifecycleTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(response_task, 2)
         self.assertTrue(task.cancelled())
         self.assertTrue(self.file_survived_inference)
+        self.assert_cleaned_once()
+
+    async def test_context_survives_api_service_and_runtime(self) -> None:
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(openai_compatible.router)
+        body = (
+            '--audio-test\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n水务项目会议'
+            '\r\n--audio-test\r\nContent-Disposition: form-data; name="hotwords"\r\n\r\n光谷水投,武汉新城'
+            '\r\n--audio-test\r\nContent-Disposition: form-data; name="response_format"\r\n\r\njson'
+            '\r\n--audio-test\r\nContent-Disposition: form-data; name="file"; filename="sample.wav"'
+            "\r\nContent-Type: audio/wav\r\n\r\naudio\r\n--audio-test--\r\n"
+        ).encode()
+        with patch.object(
+            openai_compatible,
+            "get_offline_transcription_service",
+            return_value=self.service,
+        ):
+            status, payload = await request(
+                app,
+                "/v1/audio/transcriptions",
+                body,
+                "multipart/form-data; boundary=audio-test",
+            )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(self.received_hotwords, ["水务项目会议\n光谷水投,武汉新城"])
         self.assert_cleaned_once()
 
     async def test_protocol_response_formats(self) -> None:

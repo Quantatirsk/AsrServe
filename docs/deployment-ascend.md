@@ -7,7 +7,7 @@
 | 进程 | 解释器 | 职责 |
 | --- | --- | --- |
 | 私有 `127.0.0.1:8001` | `/opt/ascend-python` | R2T2 的 Ascend AsyncLLM，实时与离线共享权重 |
-| 公共 `:8000`，映射 `17003` | `/opt/api-venv/bin/python` | API、CPU Nemotron、分段、估算时间戳与说话人归属 |
+| 公共 `:8000`，映射 `17003` | `/opt/api-venv/bin/python` | API、CPU Nemotron 与 CT-Transformer、分段、估算时间戳与说话人归属 |
 
 启动器先用 NPU 解释器检查设备，私有引擎就绪后再启动 API；任一进程退出会清理整个进程组。
 
@@ -22,7 +22,9 @@ docker compose -f compose.ascend.yml up -d
 docker compose -f compose.ascend.yml logs -f asr
 ```
 
-Compose 只引用 `quantatrisk/asrserve:ascend`（Docker Hub 发布 linux/arm64，版本标签 `1.0.4-ascend`；x86 宿主机或修改代码后用 `TARGET=ascend ./build.sh` 本地构建），挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2 与 Nemotron 到 `./models`，不下载 Aligner。
+Compose 只引用 `quantatrisk/asrserve:ascend`（Docker Hub 发布 linux/arm64，版本标签 `1.0.4-ascend`；x86 宿主机或修改代码后用 `TARGET=ascend ./build.sh` 本地构建），挂载 `./models` 与宿主驱动（`/usr/local/Ascend/driver`、`/usr/local/dcmi`、`npu-smi`），直通 `/dev/davinci0` 及管理设备。首次启动自动下载 R2T2、Nemotron 与 CT-Transformer 标点模型到 `./models`，不下载 Aligner。
+
+文件转写支持 `prompt`、`hotwords` 并恢复整份文件的句读；CPU API 环境包含固定版本的 FunASR、ModelScope 和 libsoxr，NPU 推理环境不安装这些标点组件。OpenAI `/v1/realtime` 通过私有流式协议使用已有 NPU R2T2，提供与主分支相同的手动提交、多轮和热词提示；24→16 kHz 连续重采样在 API 进程完成。SDK 配置和事件见 [OpenAI Realtime 转写](openai-realtime.md)。
 
 离线部署时，在有网络的机器预下载后拷贝 `models/`，并在 `.env` 设置 `HF_HUB_OFFLINE=1`：
 

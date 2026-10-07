@@ -24,6 +24,9 @@ jobs:
           tests/test_segment_bounds.py tests/test_speaker_diarizer.py
           tests/test_speaker_attribution.py tests/test_shared_inference.py
           tests/test_realtime.py tests/test_api_contract.py
+          tests/test_openai_realtime.py tests/test_punctuation.py
+          tests/test_model_download.py tests/test_model_integrity.py
+          tests/test_alignment_modes.py
       - run: uv run --frozen --extra cpu python -m compileall -q app deploy
       - run: bash -n scripts/prepare-models.sh
       - run: docker compose -f compose.ascend.yml config --quiet

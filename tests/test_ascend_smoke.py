@@ -116,6 +116,10 @@ def test_uniform_pipeline_switches_and_serialization(labels, words):
                 return_value="你好，world!",
             ),
             patch(
+                "app.services.asr.r2t2_engine.restore_punctuation",
+                side_effect=lambda texts: list(texts),
+            ),
+            patch(
                 "app.services.asr.r2t2_engine.uniform_word_timestamps",
                 wraps=uniform_word_timestamps,
             ) as align,

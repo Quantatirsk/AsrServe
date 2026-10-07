@@ -12,6 +12,7 @@ MODEL_REPOSITORY = "netease-youdao/Confucius4-R2T2"
 MODEL_REVISION = "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9"
 UPSTREAM_REVISION = "26d55a54ce5670cff9947a167d8ed95d569fd4d9"
 SAMPLE_RATE = 16000
+MAX_CONTEXT_CHARACTERS = 2048
 BYTES_PER_SECOND = SAMPLE_RATE * 2
 CHUNK_SAMPLES = 2560  # 160 ms; the first decode has 160 ms lookahead.
 MAX_SECONDS = 3600
@@ -26,7 +27,7 @@ PROTOCOL_VERSION = 1
 
 class StreamConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    context: str = Field(default="", max_length=2048)
+    context: str = Field(default="", max_length=MAX_CONTEXT_CHARACTERS)
 
 
 class StreamError(Exception):

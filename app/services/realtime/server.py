@@ -17,6 +17,7 @@ from app.core.config import OFFLINE_MAX_SECONDS, settings
 from .engine import Model
 from .protocol import (
     CHUNK_SAMPLES,
+    MAX_CONTEXT_CHARACTERS,
     MAX_SECONDS,
     MODEL_ID,
     MODEL_REVISION,
@@ -140,7 +141,10 @@ def create_app(model_factory=Model, *, max_sessions=None):
         return capabilities()
 
     @app.post("/v1/transcribe")
-    async def transcribe(request: Request, context: str = Query("", max_length=2048)):
+    async def transcribe(
+        request: Request,
+        context: str = Query("", max_length=MAX_CONTEXT_CHARACTERS),
+    ):
         if not authorized(request.headers):
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
         if not app.state.ready or app.state.offline_active >= OFFLINE_CONCURRENCY:

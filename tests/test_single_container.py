@@ -1,4 +1,6 @@
 import io
+import base64
+import json
 import os
 import subprocess
 import sys
@@ -11,6 +13,19 @@ from deploy import entrypoint as launcher
 
 
 class SingleContainerTest(unittest.TestCase):
+    def test_public_websocket_accepts_the_documented_base64_append_size(self):
+        from app.services.realtime.openai_protocol import MAX_APPEND_BYTES
+
+        _, api = launcher.services()
+        limit = int(api.command[api.command.index("--ws-max-size") + 1])
+        message = json.dumps(
+            {
+                "type": "input_audio_buffer.append",
+                "audio": base64.b64encode(b"\0" * MAX_APPEND_BYTES).decode("ascii"),
+            }
+        )
+        self.assertLessEqual(len(message.encode("utf-8")), limit)
+
     def service(self, name, code="import time; time.sleep(60)"):
         return launcher.Service(
             name,
@@ -33,6 +48,24 @@ class SingleContainerTest(unittest.TestCase):
         self.assertEqual(engine.env["PYTHONPATH"], root)
         self.assertEqual(api.env["PYTHONPATH"], root)
         self.assertIn("127.0.0.1", engine.command)
+
+    def test_native_port_controls_api_and_health_only(self) -> None:
+        with patch.dict(os.environ, {"PORT": "17003"}):
+            engine, api = launcher.services()
+            self.assertEqual(api.command[api.command.index("--port") + 1], "17003")
+            self.assertEqual(api.url, "http://127.0.0.1:17003/health")
+            self.assertEqual(engine.command[engine.command.index("--port") + 1], "8001")
+            self.assertEqual(engine.url, "http://127.0.0.1:8001/health")
+            self.assertEqual(api.env["R2T2_URL"], "http://127.0.0.1:8001")
+            with (
+                patch.object(sys, "argv", ["start.py", "--healthcheck"]),
+                patch.object(launcher, "healthy", return_value=True) as health,
+            ):
+                self.assertEqual(launcher.main(), 0)
+            self.assertEqual(
+                [call.args[0] for call in health.call_args_list],
+                [engine.url, api.url],
+            )
 
     def test_health_validates_payload(self):
         for body, expected in [
@@ -130,7 +163,7 @@ class SingleContainerTest(unittest.TestCase):
 
     def test_health_sends_api_key_only_to_api(self):
         for url, expected in [
-            (launcher.API_URL, "Bearer test-key"),
+            (launcher.api_url(), "Bearer test-key"),
             (launcher.ENGINE_URL, None),
         ]:
             response = io.BytesIO(b'{"ready":true}')

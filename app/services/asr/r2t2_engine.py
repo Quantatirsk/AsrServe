@@ -15,6 +15,7 @@ from app.services.realtime.protocol import MODEL_ID, OFFLINE_CONCURRENCY
 from .engines import ASRFullResult, ASRSegmentResult, WordToken
 from .forced_aligner import ForcedAligner, _load_audio
 from .long_audio import prepare_long_audio
+from .punctuation import restore_punctuation
 from .rust_backend import RustForcedAligner
 from .uniform_alignment import uniform_word_timestamps
 
@@ -71,6 +72,7 @@ class R2T2Engine:
             )
         finally:
             pool.shutdown(cancel_futures=True)
+        texts = restore_punctuation(texts)
         results = []
         for segment, audio, text in zip(segments, audios, texts):
             words = None

@@ -33,6 +33,7 @@ from ...services.asr.offline_transcription_service import (
     OfflineTranscriptionOptions,
     get_offline_transcription_service,
 )
+from ...services.realtime.protocol import MAX_CONTEXT_CHARACTERS
 
 logger = logging.getLogger(__name__)
 
@@ -437,7 +438,7 @@ async def list_models(request: Request):
 
 def _get_transcription_description() -> str:
     """获取动态的转写端点描述"""
-    return f"""将音频文件转写为文本（OpenAI Audio API 文件转写子集，不支持 Realtime 协议）。
+    return f"""将音频文件转写为文本（OpenAI Audio API 文件转写子集；实时转写使用 WebSocket /v1/realtime）。
 
 **支持的音频格式与常见含音轨视频容器：**
 `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `wav`, `webm`, `flac`, `ogg`, `amr`, `pcm`, `mov`, `mkv`, `avi`
@@ -457,6 +458,12 @@ def _get_transcription_description() -> str:
 - 启用后 `verbose_json` 格式的 segments 会包含 `speaker` 字段（如 "说话人1"）
 - 可设置 `enable_speaker_diarization=false` 关闭
 
+**热词与上下文：**
+- `hotwords`：人名、产品名等热词提示，可用逗号或换行分隔。
+- `prompt`：录音主题、术语或其他识别上下文。
+- 同时提供时，先 `prompt` 后 `hotwords`，以换行连接；合计最多 {MAX_CONTEXT_CHARACTERS} 个字符。
+- 提示应用于录音的每个识别块，帮助模型识别相关词语，不保证词语一定出现。
+
 **输出格式：**
 | 格式 | Content-Type | 说明 |
 |------|-------------|------|
@@ -471,7 +478,7 @@ def _get_transcription_description() -> str:
 - Other model IDs are rejected. `/v1/models` lists the supported model.
 
 **暂不支持的参数：**
-`prompt`、`temperature`、`timestamp_granularities` 参数已保留但暂不生效
+`temperature`、`timestamp_granularities` 参数已保留但暂不生效
 """
 
 
@@ -549,6 +556,14 @@ async def create_transcription(
         False,
         description="Return word timestamps using the forced aligner (disabled by default).",
     ),
+    hotwords: Optional[str] = Form(
+        None,
+        description=f"热词提示，如人名、产品名，可用逗号或换行分隔。与 prompt 合并后最多 {MAX_CONTEXT_CHARACTERS} 个字符",
+    ),
+    prompt: Optional[str] = Form(
+        None,
+        description=f"识别上下文，如录音主题、术语。与 hotwords 同时提供时按此顺序用换行连接，合计最多 {MAX_CONTEXT_CHARACTERS} 个字符",
+    ),
     # 5. 输出选项
     response_format: ResponseFormat = Form(
         ResponseFormat.VERBOSE_JSON,
@@ -556,7 +571,6 @@ async def create_transcription(
         examples=["verbose_json", "json", "text", "srt", "vtt"],
     ),
     # 6. 兼容性参数（暂不支持）
-    prompt: Optional[str] = Form(None, description="提示文本（暂不支持，保留兼容）"),  # noqa: ARG001
     temperature: Optional[float] = Form(
         0, description="采样温度（暂不支持，保留兼容）"
     ),  # noqa: ARG001
@@ -568,7 +582,7 @@ async def create_transcription(
 ):
     """音频转写 API (OpenAI Audio API 兼容)"""
     # 标记暂不支持的参数（保留以兼容 OpenAI API）
-    _ = (model, prompt, temperature, timestamp_granularities)
+    _ = (model, temperature, timestamp_granularities)
 
     logger.info(
         f"[OpenAI API] 收到转写请求: format={response_format}, "
@@ -593,6 +607,16 @@ async def create_transcription(
             )
             return JSONResponse(content=response_data, status_code=401)
 
+        context = "\n".join(
+            value.strip() for value in (prompt or "", hotwords or "") if value.strip()
+        )
+        if len(context) > MAX_CONTEXT_CHARACTERS:
+            response_data = create_error_response(
+                error_code="INVALID_PARAMETER",
+                message=f"Combined prompt and hotwords exceed {MAX_CONTEXT_CHARACTERS} characters",
+            )
+            return JSONResponse(content=response_data, status_code=400)
+
         transcription_service = get_offline_transcription_service()
         audio_data = await file.read() if file is not None else None
         inference_task = await transcription_service.start_transcription(
@@ -601,6 +625,7 @@ async def create_transcription(
             audio_address=audio_address,
             options=OfflineTranscriptionOptions(
                 sample_rate=16000,
+                hotwords=context,
                 enable_speaker_diarization=enable_speaker_diarization,
                 word_timestamps=word_timestamps,
                 task_id=f"openai-{int(time.time() * 1000)}",
