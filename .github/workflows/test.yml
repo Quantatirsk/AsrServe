@@ -1,10 +1,9 @@
 name: Test
 
+# NOTE: Disabled for now — only runs on manual dispatch.
+# Restore push/pull_request triggers after discussing testing approach with maintainer.
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
+  workflow_dispatch:
 
 jobs:
   test:
