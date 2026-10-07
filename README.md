@@ -1,6 +1,6 @@
 # AsrServe
 
-自部署的实时与离线语音识别服务。本项目始终采用 SOTA 开源模型和最高效的推理方案，识别质量是第一优先级；当前组合为 Confucius4-R2T2 识别、Nemotron 说话人分离、Qwen3-ForcedAligner 字词时间戳。
+自部署的实时与离线语音识别服务。本项目始终采用 SOTA 开源模型和最高效的推理方案，识别质量是第一优先级；当前组合为 Confucius4-R2T2 识别、CT-Transformer 离线标点恢复、Nemotron 说话人分离、Qwen3-ForcedAligner 字词时间戳。
 
 - 支持 NVIDIA GPU、Linux CPU（amd64/arm64），并原生适配 macOS Apple Silicon：内置 Rust 推理后端，无需 Docker 或 GPU 即可本机运行完整链路。
 - 实时与离线共用一份 R2T2 权重；离线独立识别原始录音。
@@ -23,6 +23,7 @@ docker compose -f compose.cpu.yml up -d     # CPU：quantatrisk/asrserve:cpu（a
 curl http://localhost:17003/v1/audio/transcriptions \
   -F file=@recording.wav \
   -F model=confucius4-r2t2 \
+  -F 'hotwords=光谷水投,武汉新城,东湖高新区' \
   -F response_format=verbose_json \
   -F enable_speaker_diarization=true \
   -F word_timestamps=true
@@ -32,11 +33,17 @@ curl http://localhost:17003/v1/audio/transcriptions \
 
 配置 `API_KEY` 后添加 `Authorization: Bearer <API_KEY>`。`model` 参数不切换模型，服务始终使用 R2T2。说话人段落表示主讲者，重叠活动另存于 `speaker_segments`；分离说话人不等于分离干净音轨。
 
+`hotwords` 可填写人名、产品名等词语，以逗号或换行分隔；OpenAI 兼容参数 `prompt` 可提供录音主题和术语上下文。两者都可用于文件上传和 `audio_address` URL 转写；同时提供时，去除两端空白后按 `prompt`、`hotwords` 顺序用换行连接，总计最多 2048 个字符，超限返回 HTTP 400。提示传入每个计算块的 R2T2 识别过程，属于模型的识别引导；热词权重和强制替换功能暂未提供。
+
+文件转写默认恢复全文句读：CT-Transformer 在 CPU 上结合整份文件的转写上下文补逗号、句号和问号，再进行时间对齐及说话人归属。标点标签写回原始文字，保留大小写、空格、数字和已有句末标点；断句是模型预测，仍需按实际录音检查。
+
 离线计算块与展示段落独立：保留已验证的 Nemotron 自然语音切块及 60 秒计算上限，不为减少请求数跨较长停顿拼接音频；实测这种拼接会使 R2T2 提前结束或漏识别。空活动仍保留完整音频兜底。整份录音只建立一次说话人活动索引，复用识别后的字词时间戳完成归属。连续同一说话人的内容跨计算块合并，**没有 30 秒段落限制**；短插话合计不足 2 秒（按字词时长、不计停顿）、随后回到同一主讲者且交接间隔最多 1 秒时归入主讲者。
 
 开启说话人分离时不输出 Unknown：明确换人时切换标签，模糊重叠或无活动时优先沿用当前说话人；开头按覆盖最多或最近的活动归属，整份录音无活动但识别出文字时使用默认“说话人1”。这些是展示归属估计，不表示模型确信；原始活动仍保存在 `speaker_segments`，无活动时仍为空。文字内容和字词绝对时间保持不变，`word_timestamps` 只控制词时间戳是否公开，不改变分组。
 
 实时接口 `/v1/stream` 使用 16 kHz 单声道 PCM，协议见[实时转写](docs/realtime.md)。
+
+OpenAI Realtime 转写兼容接口 `/v1/realtime` 支持 Base64 编码的 24 kHz PCM16，音频到达时发送增量文字，由客户端 `commit` 结束一轮转写。同一连接可多轮转写，`prompt` 和 `keywords` 用于识别引导；SDK 示例、鉴权与支持范围见 [OpenAI Realtime 转写](docs/openai-realtime.md)。
 
 ## 本地开发
 

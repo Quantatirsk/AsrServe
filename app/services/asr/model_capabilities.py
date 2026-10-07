@@ -8,6 +8,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.services.realtime.protocol import MODEL_REPOSITORY, MODEL_REVISION
+from .punctuation import MODEL_HASHES, MODEL_ID, MODEL_REVISION as PUNCTUATION_REVISION
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,8 @@ class ModelAsset:
     alternative_required_patterns: tuple[tuple[str, ...], ...] = ()
     min_total_size_bytes: int = 0
     local_dir: str | None = None
+    hub: str = "huggingface"
+    file_hashes: tuple[tuple[str, str], ...] = ()
 
 
 def get_huggingface_assets() -> list[ModelAsset]:
@@ -57,5 +60,21 @@ def get_huggingface_assets() -> list[ModelAsset]:
             description="Forced Aligner",
             required_patterns=("config.json", "model.safetensors"),
             min_total_size_bytes=500_000_000,
+        ),
+    ]
+
+
+def get_model_assets() -> list[ModelAsset]:
+    return [
+        *get_huggingface_assets(),
+        ModelAsset(
+            model_id=MODEL_ID,
+            description="CT-Transformer Punctuation",
+            revision=PUNCTUATION_REVISION,
+            required_patterns=("config.yaml", "model.pt", "tokens.json"),
+            min_total_size_bytes=290_000_000,
+            local_dir=settings.PUNCTUATION_MODEL_PATH,
+            hub="modelscope",
+            file_hashes=MODEL_HASHES,
         ),
     ]

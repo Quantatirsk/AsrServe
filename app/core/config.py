@@ -44,6 +44,10 @@ class Settings:
     LOG_BACKUP_COUNT: int = 50  # 保留50个备份文件
 
     NEMOTRON_MODEL_PATH: str = str(BASE_DIR / "models/nemotron-3-diarization")
+    PUNCTUATION_MODEL_PATH: str = str(
+        BASE_DIR / "models/modelscope/hub/models/iic"
+        / "punc_ct-transformer_zh-cn-common-vocab272727-pytorch"
+    )
     R2T2_URL: str = ""
     R2T2_INTERNAL_TOKEN: str = ""
     # 音频处理配置

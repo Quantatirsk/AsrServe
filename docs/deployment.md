@@ -53,9 +53,11 @@ IMAGE=quantatrisk/asrserve:cpu ./scripts/prepare-models.sh   # 用 :cpu 镜像
 
 ## 模型与运行数据
 
-唯一挂载 `./models:/app/models`：`models/huggingface` 存放 R2T2 与强制对齐模型，`models/nemotron-3-diarization` 存放 Nemotron。日志用 `docker compose logs`，临时音频与编译缓存留在容器内。
+唯一挂载 `./models:/app/models`：`models/huggingface` 存放 R2T2 与强制对齐模型，`models/nemotron-3-diarization` 存放 Nemotron，`models/modelscope/hub/models/iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch` 存放 CT-Transformer。日志用 `docker compose logs`，临时音频与编译缓存留在容器内。
 
 R2T2 revision 固定为 `185ce639118ad1362d049ca0d8ed04b6ec5cd6c9`，Nemotron revision 为 `f667ed73aee57d40cc39428eb768b4fd87a0a29e`。Python 依赖由 `uv.lock` 锁定。
+
+CT-Transformer 复用此前的约 292 MB 标点权重，固定 ModelScope `v2.0.4` 并校验三个必需文件的 SHA-256。文件转写默认在 CPU 上恢复段内及句尾标点，不额外占用 GPU 显存。已有匹配缓存可直接复用，缺失时首次启动自动下载；`HF_HUB_OFFLINE=1` 同时禁止该模型的下载。升级此修复需重建镜像或同步更新后的依赖。
 
 ## 原生 CPU
 

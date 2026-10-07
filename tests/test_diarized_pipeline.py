@@ -19,6 +19,12 @@ from app.utils.speaker_diarizer import DiarizationResult, SpeakerSegment
 class DiarizedPipelineTest(unittest.TestCase):
     def setUp(self) -> None:
         self.context = ExitStack()
+        self.punctuation = self.context.enter_context(
+            patch(
+                "app.services.asr.r2t2_engine.restore_punctuation",
+                side_effect=lambda texts: list(texts),
+            )
+        )
         self.addCleanup(self.context.close)
         self.directory = Path(self.context.enter_context(tempfile.TemporaryDirectory()))
         self.source = self.directory / "recording.wav"
@@ -281,12 +287,20 @@ class DiarizedPipelineTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Recognition failed"):
             self.transcribe()
         self.assert_cleaned()
+
         self.recognize.side_effect = ["First. Yes! Mixed.", "After."]
         self.engine.aligner.align_transcript.side_effect = RuntimeError(
             "Alignment failed"
         )
         with self.assertRaisesRegex(RuntimeError, "Alignment failed"):
             self.transcribe()
+        self.assert_cleaned()
+
+    def test_punctuation_failure_cleans_chunks_before_alignment(self) -> None:
+        self.punctuation.side_effect = RuntimeError("Punctuation failed")
+        with self.assertRaisesRegex(RuntimeError, "Punctuation failed"):
+            self.transcribe()
+        self.engine.aligner.align_transcript.assert_not_called()
         self.assert_cleaned()
 
     def test_diarization_failure_does_not_start_asr_or_leave_owned_directory(
